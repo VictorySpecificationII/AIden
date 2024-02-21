@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone-ci
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: drone-ci
+  template:
+    metadata:
+      labels:
+        app: drone-ci
+    spec:
+      containers:
+      - name: drone-ci
+        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+        ports:
+        - containerPort: 80
+          name: http

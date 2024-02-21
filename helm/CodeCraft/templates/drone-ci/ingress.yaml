@@ -1,0 +1,16 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: drone-ci-ingress
+spec:
+  rules:
+  - host: drone.aiden.ai
+    http:
+      paths:
+      - pathType: Prefix
+        path: /
+        backend:
+          service:
+            name: drone-ci
+            port:
+              number: 80
