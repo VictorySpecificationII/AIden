@@ -13,7 +13,9 @@ The world's best co-pilot.
 
 # Components
 
- - SignalSculptor - Top Level Design for the input system to AIden (Textual/Voice/Visual/Sensory)
+ - SignalSculptor - Top Level Design for the input system to AIden
+  - Sensory Suite - Visual, Audio, Thermal
+  - Input Suite - Text, Voice
  - MindForge - AIden's Personality Engine(LLM) and toolset
  - EchoSphere - Top Level Design for the output system to AIden (API Execution, Textual, Voice)
  - CyberGuardian - Top Level Design for AIden's security system
