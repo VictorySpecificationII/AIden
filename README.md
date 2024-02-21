@@ -16,3 +16,6 @@ The world's best co-pilot.
  - SignalSculptor - Top Level Design for the input system to AIden (Textual/Voice/Visual/Sensory)
  - MindForge - AIden's Personality Engine(LLM) and toolset
  - EchoSphere - Top Level Design for the output system to AIden (API Execution, Textual, Voice)
+ - CyberGuardian - Top Level Design for AIden's security system
+ - CodeCraft - Top Level Design for CI/CD
+ - CaringCustodian - Top Level Design for SRE
