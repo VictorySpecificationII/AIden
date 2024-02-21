@@ -68,3 +68,49 @@ The world's best co-pilot.
         - Accessing weather data from a weather API to provide users with current conditions and forecasts.
         - Retrieving information from a news API to deliver headlines or articles.
 
+
+## Dark Side Capabilities
+
+```
+TL;DR Are we sending a warning or a message?
+```
+
+1. **Initial Reconnaissance**:
+   - Gather basic information about the target, including their identity, affiliations, and online presence.
+   - Conduct open-source intelligence (OSINT) research using public databases, social media profiles, and search engines to collect initial data points.
+
+2. **Network Reconnaissance**:
+   - Scan the target's network infrastructure to identify potential entry points, vulnerabilities, and exposed services.
+   - Use tools like Nmap or Shodan to discover open ports, services, and devices connected to the target's network.
+
+3. **Vulnerability Assessment**:
+   - Identify and assess vulnerabilities in the target's systems, applications, and infrastructure.
+   - Utilize vulnerability scanning tools like Nessus or OpenVAS to identify known security weaknesses and misconfigurations.
+
+4. **Exploitation**:
+   - Exploit discovered vulnerabilities to gain unauthorized access to the target's systems or networks.
+   - Use exploit frameworks like Metasploit to automate the exploitation process and execute attacks against vulnerable targets.
+
+5. **Privilege Escalation**:
+   - Elevate privileges on compromised systems to gain deeper access and control over the target's resources.
+   - Exploit misconfigurations or software vulnerabilities to escalate privileges and obtain administrator-level access.
+
+6. **Data Collection**:
+   - Gather sensitive information, credentials, and data from compromised systems and networks.
+   - Use tools like Mimikatz to extract passwords from memory, and collect files, emails, or other valuable assets from compromised systems.
+
+7. **Persistence**:
+   - Establish persistence mechanisms to maintain access to compromised systems over time.
+   - Install backdoors, rootkits, or remote access trojans (RATs) to ensure continued access even if initial entry points are discovered and closed.
+
+8. **Covering Tracks**:
+   - Remove evidence of unauthorized access and activity to avoid detection and attribution.
+   - Delete logs, erase forensic artifacts, and modify timestamps to obfuscate the attacker's presence and actions.
+
+9. **Intimidation and Psychological Warfare**:
+   - Use gathered information to intimidate the target through targeted messages, threats, or disclosures.
+   - Employ psychological tactics to instill fear, uncertainty, and doubt (FUD) in the target, deterring further resistance or retaliation.
+
+10. **Retaliation**:
+    - Optionally, launch retaliatory actions against the target, such as leaking sensitive information, disrupting operations, or launching denial-of-service (DoS) attacks.
+    - Assess the potential legal and ethical implications of retaliatory actions before proceeding.
