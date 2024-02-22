@@ -7,5 +7,5 @@ World's best co-pilot
 ```
 python3 -m venv venv
 source venv/bin/activate
-pip install SpeechRecognition flask transformers
+pip install SpeechRecognition flask transformers pocketsphinx
 ```
