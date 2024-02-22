@@ -1,6 +1,6 @@
 from threading import Thread
-from lib.SignalSculptor.audio_prompt import monitor_audio_input, get_audio_prompt, process_audio_prompt
-from lib.SignalSculptor.text_prompt import get_text_prompt, process_text_prompt
+from src.SignalSculptor.modules.audio_prompt import monitor_audio_input, get_audio_prompt, process_audio_prompt
+from src.SignalSculptor.modules.text_prompt import get_text_prompt, process_text_prompt
 
 def process_audio():
     while True:
