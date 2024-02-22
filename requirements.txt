@@ -3,6 +3,7 @@ cffi==1.16.0
 charset-normalizer==3.3.2
 idna==3.6
 pocketsphinx==5.0.3
+PyAudio==0.2.14
 pycparser==2.21
 requests==2.31.0
 sounddevice==0.4.6

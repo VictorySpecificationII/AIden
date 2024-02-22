@@ -18,6 +18,16 @@ The world's best co-pilot.
  - EchoSphere - Top Level Design for the output system to AIden (API Execution, Textual, Voice)
  - CyberGuardian - Top Level Design for AIden's security system
 
+# Installation
+
+```sudo apt-get install portaudio19-dev
+   git clone https://github.com/VictorySpecificationII/AIden
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+```
+
+
 # Capabilities
 
 ## Input Suite
