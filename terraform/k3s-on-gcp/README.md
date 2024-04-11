@@ -17,3 +17,13 @@ A HA k3s cluster build with:
  - Modify terraform.tfvars
  - Run ```terraform plan```
  - Run ```terraform apply```
+ - Run ```gcloud compute instances list --project=aiden-ai-copilot``` to list all the instances of the cluster.
+ - Run ```gcloud compute scp --zone "europe-west1-b" --tunnel-through-iap --project aiden-ai-copilot k3s-server-<REPLACE WITH API SERVER IDENTIFIER>:/etc/rancher/k3s/k3s.yaml ./kubeconfig k3s.yaml``` to copy over the file.
+
+Now you should have a kubeconfig file in your current directory. Next, take the public IP address of the TCP Load Balancer and replace 127.0.0.1 in the kubeconfig file with that IP address.
+
+Run ```export IP=$(gcloud compute addresses list --project $PROJECT | grep k3s-api-server-external | tr -s ' ' | cut -d ' ' -f 2) sed -i "s/127.0.0.1/$IP/g" kubeconfig```
+
+Lastly, test if you can reach the cluster:
+
+Run ```$ kubectl --kubeconfig ./kubeconfig get nodes -o wide```
