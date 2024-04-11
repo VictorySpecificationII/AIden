@@ -5,3 +5,15 @@ variable "project_id" {
   default     = "none"
   description = "GCP Project ID"
 }
+
+variable "region" {
+  type        = string
+  default     = "none"
+  description = "GCP Region"
+}
+
+variable "zone" {
+  type        = string
+  default     = "none"
+  description = "GCP Zone"
+}
