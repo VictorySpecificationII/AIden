@@ -22,6 +22,7 @@ Then run the following commands to login to gcloud CLI and deploy the cluster:
 ```
 gcloud auth application-default login
 gcloud auth application-default set-quota-project aiden-ai-copilot
+gcloud compute config-ssh
 terraform fmt
 terraform validate
 terraform plan
