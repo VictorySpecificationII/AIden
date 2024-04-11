@@ -19,8 +19,8 @@ resource "google_compute_network" "vpc_network" {
 
 resource "google_compute_firewall" "k3s-firewall" {
   name = "k3s-firewall"
-  #network = "default"
-  network = google_compute_network.vpc_network.name
+  network = "default"
+  #network = google_compute_network.vpc_network.name
   allow {
     protocol = "tcp"
     ports    = ["6443", "22"]
@@ -42,7 +42,7 @@ resource "google_compute_instance" "k3s_master_instance" {
 
   network_interface {
     network = "default"
-
+    #network = google_compute_network.vpc_network.name
     access_config {}
   }
 
@@ -69,8 +69,8 @@ resource "google_compute_instance" "k3s_worker_instance" {
   }
 
   network_interface {
-    #network = "default"
-    network = google_compute_network.vpc_network.name
+    network = "default"
+    #network = google_compute_network.vpc_network.name
 
     access_config {}
   }
