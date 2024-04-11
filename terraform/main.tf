@@ -25,6 +25,7 @@ resource "google_compute_firewall" "k3s-firewall" {
     protocol = "tcp"
     ports    = ["6443", "22"]
   }
+  source_tags = ["k3s"]
   target_tags = ["k3s"]
 }
 
@@ -46,7 +47,8 @@ resource "google_compute_instance" "k3s_master_instance" {
   }
 
   provisioner "local-exec" {
-    command = "k3sup install --ip ${self.network_interface[0].access_config[0].nat_ip} --context k3s --ssh-key ~/.ssh/google_compute_engine --user $(whoami)"
+    command = "pwd"
+    #command = "k3sup install --ip ${self.network_interface[0].access_config[0].nat_ip} --context k3s --ssh-key ~/.ssh/google_compute_engine --user $(whoami)"
   }
 
   depends_on = [
@@ -74,7 +76,8 @@ resource "google_compute_instance" "k3s_worker_instance" {
   }
 
   provisioner "local-exec" {
-    command = "k3sup join --ip ${self.network_interface[0].access_config[0].nat_ip} --server-ip ${google_compute_instance.k3s_master_instance.network_interface[0].access_config[0].nat_ip} --ssh-key ~/.ssh/google_compute_engine --user $(whoami)"
+    command = "pwd"
+    #command = "k3sup join --ip ${self.network_interface[0].access_config[0].nat_ip} --server-ip ${google_compute_instance.k3s_master_instance.network_interface[0].access_config[0].nat_ip} --ssh-key ~/.ssh/google_compute_engine --user $(whoami)"
   }
 
   depends_on = [
