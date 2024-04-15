@@ -14,6 +14,15 @@ A HA k3s cluster build with:
 
 # How to use
 
+## Prerequisites
+
+ - Install Terraform, v1.7.5 is used for this
+ - Install gcloud CLI on your localhost 
+
+## Deploy Cluster
+
+ - Run ```gcloud auth login```
+ - Run ```gcloud config set project aiden-ai-copilot```
  - Modify terraform.tfvars
  - Run ```terraform plan```
  - Run ```terraform apply```
