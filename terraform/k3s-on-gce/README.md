@@ -30,8 +30,8 @@ A HA k3s cluster build with:
  - Run ```gcloud compute scp --zone "europe-west1-b" --tunnel-through-iap --project aiden-ai-copilot k3s-server-<REPLACE WITH API SERVER IDENTIFIER>:/etc/rancher/k3s/k3s.yaml ./kubeconfig k3s.yaml``` to copy over the file.
 
 Now you should have a kubeconfig file in your current directory. Next, take the public IP address of the TCP Load Balancer and replace 127.0.0.1 in the kubeconfig file with that IP address. The commands below let you do just that.
- 
- - Run ```export IP=<IP_OF_LOAD_BALANCER>```
+ - Run ```gcloud compute forwarding-rules list```
+ - Run ```export IP=<IP_OF_EXTERNAL_LOAD_BALANCER>```
  - Run ```IP=$(gcloud compute addresses list --project aiden-ai-copilot | grep k3s-api-server-external | tr -s ' ' | cut -d ' ' -f 2)
 sed -i "s/127.0.0.1/$IP/g" kubeconfig```
 
