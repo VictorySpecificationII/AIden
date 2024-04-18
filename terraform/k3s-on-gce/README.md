@@ -21,7 +21,7 @@ A HA k3s cluster build with:
 
 ## Deploy Cluster
 
- - Run ```gcloud auth login```
+ - Run ```gcloud auth login --update-adc```
  - Run ```gcloud config set project aiden-ai-copilot```
  - Modify terraform.tfvars
  - Run ```terraform plan```
