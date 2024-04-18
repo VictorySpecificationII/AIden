@@ -40,6 +40,10 @@ Lastly, test if you can reach the cluster:
 
  - Run ```kubectl --kubeconfig ./kubeconfig get nodes -o wide```
 
+To use kubeconfig without the --kubeconfig option:
+
+ - Run ```export KUBECONFIG=<ABSOLUTE_PATH_TO_KUBECONFIG>```
+ - Run ```kubectl get nodes -o wide```
 
 ## Install ArgoCD
 
