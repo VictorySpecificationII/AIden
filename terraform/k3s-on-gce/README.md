@@ -1,5 +1,14 @@
 # Multi Region k3s cluster on GCP
 
+# Todo
+
+ [ ] Upgrade K3s infra to v1.29.2+k3s1
+
+ [ ] Upgrade Cloud SQL to POSTGRES_15
+
+ [ ] Upgrade Debian to version 12
+
+# Introduction
 
 A HA k3s cluster build with:
 
