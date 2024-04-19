@@ -53,3 +53,23 @@ To install the HA version of ArgoCD:
  - Run ```mv install.yaml argocd-ha.yaml```
  - Run ```kubectl --kubeconfig ./kubeconfig create ns argocd```
  - Run ```kubectl --kubeconfig ./kubeconfig apply -f argocd-ha.yaml -n argocd```
+
+
+## Create Cluster DNS Records
+
+### Manually
+
+ - Visit ```https://ie.godaddy.com/help/add-a-subdomain-4080```
+ - Follow the instructions. IP is the IP of the external load balancer.
+
+### Automated Script
+
+Execute the following steps to automatically create the DNS records using the provided script, in my case I host my domains on GoDaddy.
+
+ - Run ```gcloud compute forwarding-rules list```
+ - Note the external IP of the load balancer
+ - Populate the envfile with the needed variables
+ - Run ```source envfile```
+ - Run ```env | grep GO``` to make sure the environment variables have been set.
+ - Modify the list in the domain_reg.sh file with the subdomains you want and their associated IP's (in this case, the external LB IP)
+ - Run ```chmod +x domain_reg.sh && ./domain_reg.sh``` and it should create the records for you.

@@ -1,0 +1,5 @@
+#!/bin/bash
+
+export GODADDY_API_KEY=your_godaddy_api_key
+export GODADDY_API_SECRET=your_godaddy_api_secret
+export GODADDY_DOMAIN=your_domain.com
