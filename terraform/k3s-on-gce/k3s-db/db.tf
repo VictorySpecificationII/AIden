@@ -6,7 +6,7 @@ resource "random_id" "k3s-db" {
 resource "google_sql_database_instance" "k3s-db" {
   name             = random_id.k3s-db.hex
   region           = var.region
-  database_version = "POSTGRES_11"
+  database_version = "POSTGRES_15"
 
   settings {
     tier              = var.db_tier

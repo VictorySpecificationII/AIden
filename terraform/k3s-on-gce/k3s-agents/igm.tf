@@ -20,7 +20,7 @@ resource "google_compute_instance_template" "k3s-agent" {
   }
 
   disk {
-    source_image = "debian-cloud/debian-10"
+    source_image = "debian-cloud/debian-12"
     auto_delete  = true
     boot         = true
   }

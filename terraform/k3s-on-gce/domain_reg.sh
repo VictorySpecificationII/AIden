@@ -12,9 +12,9 @@ TTL=600
 
 # Associative array mapping domains to IP addresses
 declare -A DOMAIN_IP_MAPPING=(
-    ["sudomain1"]="x.x.x.x"
-    ["sudomain2"]="x.x.x.x"
-    ["sudomain3"]="x.x.x.x"
+    ["subdomain1"]="x.x.x.x"
+    ["subdomain2"]="x.x.x.x"
+    ["subdomain3"]="x.x.x.x"
 )
 
 # Loop through the domains and their corresponding IP addresses

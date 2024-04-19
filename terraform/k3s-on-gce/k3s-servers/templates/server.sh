@@ -1,6 +1,6 @@
 #! /bin/bash
 
-curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="v1.19.3+k3s3" sh -s - \
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="v1.29.2+k3s1" sh -s - \
     --write-kubeconfig-mode 644 \
     --token "${token}" \
     --tls-san "${internal_lb_ip_address}" \
