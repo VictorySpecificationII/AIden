@@ -5,3 +5,4 @@ terraform.tfvars
 
 .env
 .domain_reg.sh
+kubeconfig
