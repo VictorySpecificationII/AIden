@@ -30,6 +30,7 @@ A HA k3s cluster build with:
 
 ## Deploy Cluster
 
+ - Run through the README file in the bootstrap/ directory
  - Run ```gcloud auth login --update-adc```
  - Run ```gcloud config set project aiden-ai-copilot```
  - Modify terraform.tfvars
@@ -76,9 +77,9 @@ To install the HA version of ArgoCD:
 Execute the following steps to automatically create the DNS records using the provided script, in my case I host my domains on GoDaddy.
 
  - Run ```gcloud compute forwarding-rules list```
- - Note the external IP of the load balancer
+ - Note the external IP of the load balancers
  - Populate the envfile with the needed variables
  - Run ```source envfile```
  - Run ```env | grep GO``` to make sure the environment variables have been set.
- - Modify the list in the domain_reg.sh file with the subdomains you want and their associated IP's (in this case, the external LB IP)
+ - Modify the list in the domain_reg.sh file with the subdomains you want and their associated IP's (in this case, the external LB IPs)
  - Run ```chmod +x domain_reg.sh && ./domain_reg.sh``` and it should create the records for you.
