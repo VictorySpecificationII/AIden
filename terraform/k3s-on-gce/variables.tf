@@ -6,14 +6,14 @@ variable "region" {
   type = string
 }
 
-variable database {
-  type = map
+variable "database" {
+  type = map(any)
 }
 
-variable servers {
-  type = map
+variable "servers" {
+  type = map(any)
 }
 
-variable agents {
-  type = map
+variable "agents" {
+  type = map(any)
 }
