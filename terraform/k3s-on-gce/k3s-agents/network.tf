@@ -29,3 +29,27 @@ resource "google_compute_router_nat" "nat" {
     source_ip_ranges_to_nat = ["ALL_IP_RANGES"]
   }
 }
+
+resource "google_compute_firewall" "k3s-worker-authorized-networks" {
+  name          = "k3s-worker-authorized-networks-${var.name}"
+  network       = var.network
+  source_ranges = ["0.0.0.0/32"]
+  allow {
+    protocol = "tcp"
+    ports    = [20000]
+  }
+  target_tags = ["k3s-agent"]
+  direction   = "INGRESS"
+}
+
+resource "google_compute_firewall" "k3s-worker-allow-hc" {
+  name          = "k3s-worker-allow-hc-${var.name}"
+  network       = var.network
+  source_ranges = ["130.211.0.0/22", "35.191.0.0/16", "209.85.152.0/22", "209.85.204.0/22"]
+  allow {
+    protocol = "tcp"
+    ports    = [20000]
+  }
+  target_tags = ["k3s-agent"]
+  direction   = "INGRESS"
+}
