@@ -2,11 +2,11 @@
 
 # Todo
 
- [ ] Upgrade K3s infra to v1.29.2+k3s1
+ [x] Upgrade K3s infra to v1.29.2+k3s1
 
- [ ] Upgrade Cloud SQL to POSTGRES_15
+ [x] Upgrade Cloud SQL to POSTGRES_15
 
- [ ] Upgrade Debian to version 12
+ [x] Upgrade Debian to version 12
 
 # Introduction
 
