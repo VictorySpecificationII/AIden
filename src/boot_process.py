@@ -1,5 +1,7 @@
 import os
 from dotenv import load_dotenv
+import requests
+from requests.exceptions import ConnectionError, Timeout
 
 def load_secrets():
     try:
@@ -17,4 +19,24 @@ def load_secrets():
 
     except Exception as e:
         print(f"Boot Error: {str(e)}")
+        return False
+
+
+def check_internet_connection():
+    url = "https://8.8.8.8"  # Google's public DNS server IP
+    timeout = 5  # Timeout in seconds
+
+    try:
+        response = requests.get(url, timeout=timeout)
+        response.raise_for_status()  # Raise exception for non-200 status codes
+
+        print("Boot: Internet connection detected.")
+        return True
+
+    except ConnectionError as e:
+        print(f"Boot Error: {str(e)}. No internet connection detected.")
+        return False
+
+    except Timeout as e:
+        print(f"Boot Error: {str(e)}. Request timed out.")
         return False
