@@ -1,16 +1,40 @@
-# AIden
+#AIden
 
-World's best co-pilot.
+AIden is a versatile co-pilot.
 
-# Infrastructure
+## Features
 
- - Multi Region k3s cluster on GCP
- - Let's Encrypt for the Ingress Controller
- - Setup Google Domain into the cluster using cert-manager
+- Retrieval-augmented generation using LlamaIndex and a language model
+- Interacts with external APIs (e.g., weather API)
+- Customized to understand personal preferences and information
 
+## Setup
 
-# Deployment Procedure
+1. Clone the repository:
+    ```bash
+    git clone https://github.com/VictorySpecificationII/AIden.git
+    cd AIden
+    ```
 
-## Cluster
+2. Create a virtual environment and activate it:
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+    ```
 
- - cd into the ```terraform``` directory and follow the README file.
+3. Install the dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4. Set up your API keys and environment variables. Create a `.env` file in the root directory and add your keys:
+    ```env
+    WEATHER_API_KEY=your_api_key_here
+    ```
+
+## Usage
+
+Run the main script:
+```bash
+python src/copilot.py
+```

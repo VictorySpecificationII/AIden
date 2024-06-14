@@ -3,4 +3,23 @@
 terraform.tfstate
 terraform.tfstate.backup
 
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+venv/
+.env
 
+.ipynb_checkpoints
+
+.DS_Store
+
+logs/
+*.log
+
+*.swp
+
+data/
+.pytest_cache/
+src/__pycache__
+tests/__pycache__
