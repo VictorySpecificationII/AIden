@@ -24,7 +24,9 @@ def boot():
     else:
         print("Boot: Process Failed. System not fully operational.")
         return False
-    
+
+    #Check if there's a local LLM model it can use if it's offline. If not, then exit. Otherwise, start using the offline model.
+
 if __name__ == "__main__":
 	
 	boot()

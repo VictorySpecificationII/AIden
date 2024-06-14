@@ -1,12 +1,18 @@
 #AIden
 
-AIden is a versatile co-pilot.
+AIden is a versatile co-pilot. Inspiration is from a long time ago, in the pre-GPT era.
 
 ## Features
 
 - Retrieval-augmented generation using LlamaIndex and a language model
 - Interacts with external APIs (e.g., weather API)
 - Customized to understand personal preferences and information
+- Multimodal:
+    - Access to camera for vision capabilities
+    - Access to microphone for hearing capabilities
+    - Access to sensors for sensory input
+- Portable, can run on the edge
+- Offline capabilities (text/voice only)
 
 ## Setup
 
@@ -27,7 +33,7 @@ AIden is a versatile co-pilot.
     pip install -r requirements.txt
     ```
 
-4. Set up your API keys and environment variables. Create a `.env` file in the root directory and add your keys:
+4. Set up your API keys and environment variables. Create a copy of the `env` file in the root directory, name it `.env` and add your keys:
     ```env
     WEATHER_API_KEY=your_api_key_here
     ```
