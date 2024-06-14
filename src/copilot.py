@@ -11,15 +11,20 @@ def boot():
     Function to initiate boot process, check internet connectivity, load secrets,
     and display ASCII art.
     """
-
     misc_utils.print_banner()
     
     print("Boot: Process Initiating")
 
-    boot_process.load_secrets()
-    boot_process.check_internet_connection()
+    secrets_loaded = boot_process.load_secrets()
+    internet_connected = boot_process.check_internet_connection()
 
-    print("Boot: Process Complete. System Operational.")
+    if secrets_loaded and internet_connected:
+        print("Boot: Process Complete. System Operational.")
+        return True
+    else:
+        print("Boot: Process Failed. System not fully operational.")
+        return False
+    
 if __name__ == "__main__":
 	
 	boot()
