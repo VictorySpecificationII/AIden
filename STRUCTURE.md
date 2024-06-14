@@ -1,3 +1,6 @@
+# Project Directory Structure
+
+```plaintext
 AIden/
 ├── data/
 │   ├── raw/                # Raw data files
