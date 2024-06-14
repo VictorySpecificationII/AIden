@@ -12,6 +12,8 @@ setup(
         'requests',
         'pytest',
         'python-dotenv',
+	'pip install llama-index-llms-huggingface',
+	'pip install llama-index-embeddings-huggingface'
     ],
     entry_points={
         'console_scripts': [
