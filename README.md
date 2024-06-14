@@ -38,3 +38,8 @@ Run the main script:
 ```bash
 python src/copilot.py
 ```
+
+In order to run the testing suite, navigate to the root of the project and run:
+```bash
+pytest
+```
