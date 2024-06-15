@@ -19,11 +19,11 @@ def load_secrets():
             raise ValueError("OPENAI_API_KEY not found in environment variables. Ensure it's set in your .env file.")
 
         print("Boot: Secrets loaded.")
-        return True
+        return 1
 
     except Exception as e:
         print(f"Boot Error: {str(e)}")
-        return False
+        return 0
 
 
 def check_internet_connection():
