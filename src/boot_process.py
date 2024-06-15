@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import requests
 from requests.exceptions import ConnectionError, Timeout
 import pyaudio
+import numpy as np
 
 def load_secrets():
     try:
@@ -42,7 +43,7 @@ def check_internet_connection():
         print(f"Boot Error: {str(e)}. Request timed out.")
         return -1
 
-def find_and_select_microphone():
+def check_mic_connection():
     # Create an instance of PyAudio
     p = pyaudio.PyAudio()
     
@@ -68,20 +69,49 @@ def find_and_select_microphone():
         print("No microphones found.")
         return None
     
-    # Select the first available microphone as the active one (or implement a better selection logic if needed)
-    active_microphone = microphones[0]
-    print(f"Selected Microphone: {active_microphone.get('name')} , Device Index: {active_microphone.get('index')}")
+    # Test each microphone by recording a 2-second sample
+    for mic in microphones:
+        print(f"Testing microphone: {mic.get('name')} (Index: {mic.get('index')})")
+        
+        # Set parameters for recording
+        format = pyaudio.paInt16
+        channels = 1
+        rate = 44100
+        chunk = 2048
+        record_seconds = 0.25
+        
+        # Open stream for microphone input
+        stream = p.open(format=format,
+                        channels=channels,
+                        rate=rate,
+                        input=True,
+                        frames_per_buffer=chunk,
+                        input_device_index=mic.get('index'))
+        
+        frames = []
+        
+        # Record audio for specified seconds
+        for _ in range(int(rate / chunk * record_seconds)):
+            data = stream.read(chunk)
+            frames.append(data)
+        
+        # Stop and close the stream
+        stream.stop_stream()
+        stream.close()
+        
+        # Convert frames to numpy array
+        audio_data = np.frombuffer(b''.join(frames), dtype=np.int16)
+        
+        # Check if there is any significant audio signal
+        if np.max(np.abs(audio_data)) > 500:  # Adjust threshold as needed
+            print(f"Detected sound on microphone: {mic.get('name')} (Index: {mic.get('index')})")
+            return mic.get('index'), mic.get('name')
+        else:
+            print(f"No sound detected on microphone: {mic.get('name')} (Index: {mic.get('index')})")
     
-    # Return the selected microphone's index and name
-    return active_microphone.get('index'), active_microphone.get('name')
-
-def check_mic_connection():
-    index, name = find_and_select_microphone()
-    if index is not None:
-        print(f"Using microphone: {name} (Index: {index})")
-
-
-
+    # If no microphone detected sound, return None
+    print("No microphone detected sound.")
+    return None
 
 def check_camera_connection():
     pass
