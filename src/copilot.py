@@ -20,7 +20,7 @@ def boot():
     mic_check = boot_process.check_mic_connection()
     cam_check = boot_process.check_camera_connection()
 
-    if secrets_loaded and internet_connected and mic_check and cam_check:
+    if secrets_loaded and internet_connected and (mic_check or cam_check):
         print("Boot: Process Complete. System Operational.")
         return True
     else:

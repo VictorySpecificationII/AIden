@@ -135,7 +135,11 @@ def check_camera_connection():
             # cv2.imshow('Captured Image', frame)
             # cv2.waitKey(0)  # Wait indefinitely until a key is pressed
             # cv2.destroyAllWindows()  # Close the image window
+            tmp_image_path = os.path.join('/tmp', 'captured_image_boot_process.jpg')
+            cv2.imwrite(tmp_image_path, frame)
+            print(f"Test Image saved to {tmp_image_path}")
             print("Detected vision on camera: Camera is available and can capture images.")
+            print(f"Vision: Camera Resolution: {frame.shape[1]}x{frame.shape[0]}")
             return 1
 
         else:
