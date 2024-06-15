@@ -4,6 +4,7 @@ import requests
 from requests.exceptions import ConnectionError, Timeout
 import pyaudio
 import numpy as np
+import subprocess
 
 def load_secrets():
     try:
@@ -78,7 +79,7 @@ def check_mic_connection():
         format = pyaudio.paInt16
         channels = 1
         rate = 44100
-        chunk = 2048
+        chunk = 4096
         record_seconds = 0.25
         
         # Open stream for microphone input
@@ -119,4 +120,5 @@ def check_camera_connection():
     pass
 
 def check_sensory_connection():
+    # That's a complicated bit, work on it once you have sensors
     pass
