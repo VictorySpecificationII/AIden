@@ -40,3 +40,12 @@ def check_internet_connection():
     except Timeout as e:
         print(f"Boot Error: {str(e)}. Request timed out.")
         return -1
+
+def check_mic_connection():
+    pass
+
+def check_camera_connection():
+    pass
+
+def check_sensory_connection():
+    pass
