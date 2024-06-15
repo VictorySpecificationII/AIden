@@ -19,9 +19,9 @@ def boot():
     internet_connected = boot_process.check_internet_connection()
     mic_check = boot_process.check_mic_connection()
 
-    #print(secrets_loaded)
-    #print(internet_connected)
-    #print(mic_check)
+    # print(secrets_loaded)
+    # print(internet_connected)
+    # print(mic_check)
     # if secrets_loaded and internet_connected:
     #     print("Boot: Process Complete. System Operational.")
     #     return True

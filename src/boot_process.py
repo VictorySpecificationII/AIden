@@ -106,7 +106,8 @@ def check_mic_connection():
         # Check if there is any significant audio signal
         if np.max(np.abs(audio_data)) > 500:  # Adjust threshold as needed
             print(f"Detected sound on microphone: {mic.get('name')} (Index: {mic.get('index')})")
-            return mic.get('index'), mic.get('name')
+            #return mic.get('index'), mic.get('name')
+            return 1
         else:
             print(f"No sound detected on microphone: {mic.get('name')} (Index: {mic.get('index')})")
     
