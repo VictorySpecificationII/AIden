@@ -18,12 +18,14 @@ def boot():
     secrets_loaded = boot_process.load_secrets()
     internet_connected = boot_process.check_internet_connection()
 
-    if secrets_loaded and internet_connected:
-        print("Boot: Process Complete. System Operational.")
-        return True
-    else:
-        print("Boot: Process Failed. System not fully operational.")
-        return False
+    print(secrets_loaded)
+    print(internet_connected)
+    # if secrets_loaded and internet_connected:
+    #     print("Boot: Process Complete. System Operational.")
+    #     return True
+    # else:
+    #     print("Boot: Process Failed. System not fully operational.")
+    #     return False
 
     #Check if there's a local LLM model it can use if it's offline. If not, then exit. Otherwise, start using the offline model.
 

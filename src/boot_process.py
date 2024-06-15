@@ -31,12 +31,12 @@ def check_internet_connection():
         response.raise_for_status()  # Raise exception for non-200 status codes
 
         print("Boot: Internet connection detected.")
-        return True
+        return 1
 
     except ConnectionError as e:
         print(f"Boot Error: {str(e)}. No internet connection detected.")
-        return False
+        return 0
 
     except Timeout as e:
         print(f"Boot Error: {str(e)}. Request timed out.")
-        return False
+        return -1
