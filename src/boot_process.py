@@ -74,6 +74,7 @@ def check_mic_connection():
         print(f"Testing microphone: {mic.get('name')} (Index: {mic.get('index')})")
         
         # Set parameters for recording
+        # NOTE: If you get overflow errors, adjust these settings. The current settings seem to work. 
         format = pyaudio.paInt16
         channels = 1
         rate = 44100
@@ -109,9 +110,9 @@ def check_mic_connection():
         else:
             print(f"No sound detected on microphone: {mic.get('name')} (Index: {mic.get('index')})")
     
-    # If no microphone detected sound, return None
+    # If no microphone detected sound, return 0
     print("No microphone detected sound.")
-    return None
+    return 0
 
 def check_camera_connection():
     pass
