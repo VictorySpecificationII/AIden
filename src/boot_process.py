@@ -5,6 +5,7 @@ from requests.exceptions import ConnectionError, Timeout
 import pyaudio
 import numpy as np
 import subprocess
+import cv2
 
 def load_secrets():
     try:
@@ -117,7 +118,38 @@ def check_mic_connection():
     return 0
 
 def check_camera_connection():
-    pass
+    try:
+        # Open the webcam
+        cap = cv2.VideoCapture(0)  # Use 0 for default webcam
+
+        if not cap.isOpened():
+            print("Vision Error: Could not open webcam.")
+            return 0
+
+        # Read a frame from the webcam
+        ret, frame = cap.read()
+
+        # Check if the frame is read correctly
+        if ret:
+            # Display the captured image
+            # cv2.imshow('Captured Image', frame)
+            # cv2.waitKey(0)  # Wait indefinitely until a key is pressed
+            # cv2.destroyAllWindows()  # Close the image window
+            print("Detected vision on camera: Camera is available and can capture images.")
+            return 1
+
+        else:
+            print("Vision Error: Failed to capture image from webcam.")
+            return -1
+
+    except Exception as e:
+        print(f"Error: {str(e)}")
+        return -2
+
+    finally:
+        # Release the webcam
+        if cap.isOpened():
+            cap.release()
 
 def check_sensory_connection():
     # That's a complicated bit, work on it once you have sensors

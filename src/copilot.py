@@ -20,16 +20,12 @@ def boot():
     mic_check = boot_process.check_mic_connection()
     cam_check = boot_process.check_camera_connection()
 
-    print(secrets_loaded)
-    print(internet_connected)
-    print(mic_check)
-    print(cam_check)
-    # if secrets_loaded and internet_connected:
-    #     print("Boot: Process Complete. System Operational.")
-    #     return True
-    # else:
-    #     print("Boot: Process Failed. System not fully operational.")
-    #     return False
+    if secrets_loaded and internet_connected and mic_check and cam_check:
+        print("Boot: Process Complete. System Operational.")
+        return True
+    else:
+        print("Boot: Process Failed. System partially operational.")
+        return False
 
     #Check if there's a local LLM model it can use if it's offline. If not, then exit. Otherwise, start using the offline model.
 
