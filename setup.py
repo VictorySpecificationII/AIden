@@ -6,14 +6,11 @@ setup(
     packages=find_packages(where='src'),
     package_dir={'': 'src'},
     install_requires=[
-        'llama-index',
         'transformers',
         'torch',
         'requests',
         'pytest',
-        'python-dotenv',
-	'pip install llama-index-llms-huggingface',
-	'pip install llama-index-embeddings-huggingface'
+        'python-dotenv'
     ],
     entry_points={
         'console_scripts': [
