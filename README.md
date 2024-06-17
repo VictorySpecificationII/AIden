@@ -49,3 +49,6 @@ In order to run the testing suite, navigate to the root of the project and run:
 ```bash
 pytest
 ```
+# Sources
+
+ - https://nanonets.com/blog/langchain/
