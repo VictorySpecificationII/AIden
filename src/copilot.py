@@ -1,11 +1,7 @@
 import misc_utils
 from dotenv import load_dotenv
-from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
 import os
 import openai
-from langchain_community.chat_models import ChatOpenAI
-from langchain.llms import OpenAI
 from langchain_openai import OpenAI
 
 misc_utils.print_banner()
@@ -25,6 +21,6 @@ openai.api_key = openai_api_key
 
 if __name__ == "__main__":
     llm = OpenAI()
-    response = llm.invoke("List the seven wonders of the world.")
-    print(response)
-    
+    for chunk in llm.stream("Please give me a 4 line lorem ipsum so i can test something"):
+        print(chunk, end="", flush=True)
+    print("\n")
