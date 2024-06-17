@@ -52,3 +52,4 @@ pytest
 # Sources
 
  - https://nanonets.com/blog/langchain/
+ - https://github.com/KoljaB/RealtimeSTT for the real time speech transcription module
