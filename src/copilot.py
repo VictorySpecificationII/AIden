@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 import os
 import openai
 from langchain_openai import OpenAI
+from langchain.schema.messages import HumanMessage, SystemMessage, FunctionMessage, ChatMessage, AIMessage
 
 misc_utils.print_banner()
 
@@ -21,12 +22,37 @@ openai.api_key = openai_api_key
 textual_llm = OpenAI()
 
 def queryLLM(llm, query):
-    for chunk in llm.stream(query):
-        print(chunk, end="", flush=True)
-    print("\n")
+
+    # basic functionality, just as a reminder
+    # response = llm.invoke("List the seven wonders of the world.")
+    # return response
+
+    def get_response_chunks(query):
+        response_chunks = []
+        for chunk in llm.stream(query):
+            response_chunks.append(chunk)
+        return response_chunks
+
+    def print_response_chunks(chunks):
+        for chunk in chunks:
+            print(chunk, end="", flush=True)
+        print("\n")
+    
+    chunks = get_response_chunks(query)
+    print_response_chunks(chunks)
+
 
 
 if __name__ == "__main__":
-    query = "Please give me a 4 line lorem ipsum so i can test something."
+
+    #Single Message
+    #query = "Please give me a 4 line lorem ipsum so i can test something."
+
+    # LLM accepts list of messages too, useful for establishing history
+    query = [
+    SystemMessage(content="You are Micheal Jordan."),
+    HumanMessage(content="Which shoe manufacturer are you associated with?"),
+    ]
+
     queryLLM(textual_llm, query)
 
