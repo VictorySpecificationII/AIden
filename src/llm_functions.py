@@ -1,4 +1,8 @@
-def queryLLM(llm, query):
+from langchain_openai import OpenAI
+
+def queryLLM_openAI(query):
+
+    llm = OpenAI()
 
     def get_response_chunks(query):
         response_chunks = []
@@ -6,10 +10,11 @@ def queryLLM(llm, query):
             response_chunks.append(chunk)
         return response_chunks
 
-    def print_response_chunks(chunks):
-        for chunk in chunks:
-            print(chunk, end="", flush=True)
-        print("\n")
+    def concatenate_response_chunks(chunks):
+        response_string = "".join(chunks)
+        return response_string
     
     chunks = get_response_chunks(query)
-    print_response_chunks(chunks)
+    response_string = concatenate_response_chunks(chunks)
+    
+    return response_string
