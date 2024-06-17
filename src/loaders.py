@@ -1,10 +1,8 @@
 # I want AIden to be able to work with information from various sources
 import os
-from langchain.document_loaders import TextLoader
-from langchain.document_loaders.csv_loader import CSVLoader
-from langchain.document_loaders import PyPDFLoader
-
-directory="./data/raw"
+from langchain_community.document_loaders import TextLoader
+from langchain_community.document_loaders import CSVLoader
+from langchain_community.document_loaders import PyPDFLoader
 
 def load_txt_files(directory):
     documents = []
