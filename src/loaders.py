@@ -2,6 +2,7 @@
 import os
 from langchain.document_loaders import TextLoader
 from langchain.document_loaders.csv_loader import CSVLoader
+from langchain.document_loaders import PyPDFLoader
 
 directory="./data/raw"
 
@@ -23,3 +24,12 @@ def load_csv_files(directory):
             documents.extend(loader.load())
     return documents
 
+def load_pdf_files(directory):
+    documents = []
+    for filename in os.listdir(directory):
+        if filename.endswith(".pdf"):
+            file_path = os.path.join(directory, filename)
+            loader = PyPDFLoader(file_path)
+            pages = loader.load_and_split()
+            documents.extend(pages)
+    return documents
