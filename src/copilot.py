@@ -4,6 +4,7 @@ import os
 import openai
 from langchain_openai import OpenAI
 from langchain.schema.messages import HumanMessage, SystemMessage, FunctionMessage, ChatMessage, AIMessage
+import loaders
 
 misc_utils.print_banner()
 
@@ -23,10 +24,6 @@ llm = OpenAI()
 
 def queryLLM(llm, query):
 
-    # basic functionality, just as a reminder
-    # response = llm.invoke("List the seven wonders of the world.")
-    # return response
-
     def get_response_chunks(query):
         response_chunks = []
         for chunk in llm.stream(query):
@@ -43,14 +40,7 @@ def queryLLM(llm, query):
 
 if __name__ == "__main__":
 
-    #Single Message
-    #query = "Please give me a 4 line lorem ipsum so i can test something."
-
-    # LLM accepts list of messages too, useful for establishing history
-    query = [
-    SystemMessage(content="You are Micheal Jordan."),
-    HumanMessage(content="Which shoe manufacturer are you associated with?"),
-    ]
+    query = "Please give me a 4 line lorem ipsum so i can test something."
 
     queryLLM(llm, query)
 
