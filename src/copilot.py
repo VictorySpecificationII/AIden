@@ -18,9 +18,15 @@ if openai_api_key is None:
 # Set up OpenAI API key
 openai.api_key = openai_api_key
 
+llm = OpenAI()
 
-if __name__ == "__main__":
-    llm = OpenAI()
-    for chunk in llm.stream("Please give me a 4 line lorem ipsum so i can test something"):
+def queryLLM(llm, query):
+    for chunk in llm.stream(query):
         print(chunk, end="", flush=True)
     print("\n")
+
+
+if __name__ == "__main__":
+    query = "Please give me a 4 line lorem ipsum so i can test something."
+    queryLLM(llm, query)
+
