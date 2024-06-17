@@ -19,7 +19,7 @@ if openai_api_key is None:
 # Set up OpenAI API key
 openai.api_key = openai_api_key
 
-textual_llm = OpenAI()
+llm = OpenAI()
 
 def queryLLM(llm, query):
 
@@ -41,8 +41,6 @@ def queryLLM(llm, query):
     chunks = get_response_chunks(query)
     print_response_chunks(chunks)
 
-
-
 if __name__ == "__main__":
 
     #Single Message
@@ -54,5 +52,5 @@ if __name__ == "__main__":
     HumanMessage(content="Which shoe manufacturer are you associated with?"),
     ]
 
-    queryLLM(textual_llm, query)
+    queryLLM(llm, query)
 
