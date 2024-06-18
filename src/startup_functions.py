@@ -14,16 +14,3 @@ def print_banner():
 
     """
     print(ascii_art)
-
-def load_environment_variables():
-    # Startup things
-    load_dotenv()
-
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-
-    # Check if the key is present
-    if openai_api_key is None:
-        raise ValueError("OpenAI API key not found in the environment file.")
-
-    # Set up OpenAI API key
-    openai.api_key = openai_api_key
