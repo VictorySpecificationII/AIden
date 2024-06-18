@@ -22,7 +22,7 @@ def load_llm():
 
     return model_path
 
-def instantiate_llm():
+def instantiate_llm(path):
     model_kwargs = {
       "n_ctx":4096,    # Context length to use
       "n_threads":4,   # Number of CPU threads to use
@@ -30,10 +30,10 @@ def instantiate_llm():
     }
 
     ## Instantiate model from downloaded file
-    llm = Llama(model_path=model_path, **model_kwargs)
+    llm = Llama(model_path=path, **model_kwargs)
     return llm
 
-def run_inference(input):
+def run_inference(input, llm):
     ## Generation kwargs
     generation_kwargs = {
         "max_tokens":1000, # Max number of new tokens to generate
@@ -50,7 +50,8 @@ def run_inference(input):
     # print(res["choices"][0]["text"])
     return res["choices"][0]["text"]
 
-model_path = load_llm()
-llm = instantiate_llm()
-result = run_inference("meaning of life")
-print(result)
+# example usage
+# model_path = load_llm()
+# llm = instantiate_llm()
+# result = run_inference("meaning of life")
+# print(result)
