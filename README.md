@@ -4,7 +4,7 @@ AIden is a versatile co-pilot. Inspiration is from a long time ago, in the pre-G
 
 ## Features
 
-- Retrieval-augmented generation using LlamaIndex and a language model
+- Retrieval-augmented generation using LlamaIndex and LangChain.
 - Interacts with external APIs (e.g., weather API)
 - Customized to understand personal preferences and information
 - Multimodal:
@@ -13,6 +13,11 @@ AIden is a versatile co-pilot. Inspiration is from a long time ago, in the pre-G
     - Access to sensors for sensory input
 - Portable, can run on the edge
 - Offline capabilities (text/voice only)
+
+### Models Used
+
+ - Mistral 7B: The Mistral LLM is a versatile language model, excelling at tasks like reasoning, comprehension, tackling STEM problems, and even coding.
+ - Llama-2 7B is produced by Meta AI to specifically target the art of conversation.
 
 ## Setup
 
