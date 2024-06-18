@@ -14,7 +14,7 @@ def instantiate_llm(path):
     # Load the LlamaCpp language model, adjust GPU usage based on your hardware
     llm = LlamaCpp(
         model_path=path,
-        n_gpu_layers=0,
+        n_gpu_layers=2,
         n_batch=512,  # Batch size for model processing
         verbose=False,  # Enable detailed logging for debugging
     )
@@ -41,7 +41,7 @@ def main():
     print("Chatbot initialized, ready to chat...")
     while True:
         question = input("> ")
-        answer = llm_chain.invoke(question)
+        answer = llm_chain.run(question)
         print(answer, '\n')
 
 if __name__ == "__main__":

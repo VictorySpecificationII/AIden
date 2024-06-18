@@ -2,9 +2,6 @@
 from huggingface_hub import hf_hub_download
 from llama_cpp import Llama
 
-global model_path
-global llm
-
 def load_llm():
     ## Define model name and file name
     # model_name = "TheBloke/Mixtral-8x7B-Instruct-v0.1-GGUF"
@@ -50,8 +47,12 @@ def run_inference(input, llm):
     # print(res["choices"][0]["text"])
     return res["choices"][0]["text"]
 
-# example usage
-# model_path = load_llm()
-# llm = instantiate_llm()
-# result = run_inference("meaning of life")
-# print(result)
+def main():
+    model_path = load_llm()
+    llm = instantiate_llm(model_path)
+    result = run_inference("meaning of life", llm)
+    print(result)
+
+if __name__ == "__main__":
+    main()
+

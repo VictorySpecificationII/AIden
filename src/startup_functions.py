@@ -15,8 +15,3 @@ def print_banner():
 
     """
     print(ascii_art)
-
-def init_llm():
-    model_path = mistral_onboard_llm.load_llm()
-    llm = mistral_onboard_llm.instantiate_llm(model_path)
-    return llm
