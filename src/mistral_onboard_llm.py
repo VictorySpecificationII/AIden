@@ -43,6 +43,13 @@ def create_llm_chain(llm):
     llm_chain = LLMChain(prompt=prompt, llm=llm)
     return llm_chain
 
+def ask_question(question):
+    model_path = load_llm()
+    llm = instantiate_llm(model_path)
+    llm_chain = create_llm_chain(llm)
+    answer = llm_chain.run(question)
+    return answer
+
 def main():
     model_path = load_llm()
     llm = instantiate_llm(model_path)

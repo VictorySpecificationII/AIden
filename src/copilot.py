@@ -5,6 +5,5 @@ import llama2_onboard_llm
 startup_functions.print_banner()
 
 if __name__ == "__main__":
-    llama2_onboard_llm.main()
-    #mistral_onboard_llm.main()
-    pass
+    print(mistral_onboard_llm.ask_question("Are you Mistral?"))
+    print(llama2_onboard_llm.ask_question("Are you Llama2?"))
