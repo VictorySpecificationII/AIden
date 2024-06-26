@@ -48,21 +48,11 @@ def check_local_llm_availability():
 
 def check_local_gpu_availability():
     gpu_info = get_gpu_info()
-    if not check_gpu_compatibility(gpu_info):
+    if not check_gpu_compatibility(gpu_info, True):
         return False
     else:
         return True
-    
-#The idea with this function is to automatically set the GPU layers that the LLM can use, depending on the hardware present on the machine.    
-def llm_gpu_layers():
-    gpu_info = get_gpu_info()
-    if check_gpu_compatibility(gpu_info):
-        #print(f"LLM: Using 2 layers on GPU for LLM execution.")
-        return 2
-    else:
-        #print(f"LLM: Using 0 layers on GPU for LLM execution.")
-        return 0
-        
+          
 def get_gpu_info():
     gpus = GPUtil.getGPUs()
     if len(gpus) == 0:
@@ -74,20 +64,24 @@ def get_gpu_info():
         "compute_capability": gpu.compute_capability
     }
 
-def check_gpu_compatibility(gpu_info):
-    print("Startup Check: Checking GPU availability on host...")
+def check_gpu_compatibility(gpu_info, startup):
+    if startup:
+        print("Startup Check: Checking GPU availability on host...")
     if gpu_info is None:
-        print("Error: No GPU found. You are either running on Integrated Graphics, or there is an issue with your GPU.")
+        if startup:
+            print("Error: No GPU found. You are either running on Integrated Graphics, or there is an issue with your GPU.")
         return False
     # Define the minimum requirements for the language models
     min_memory = 8 * 1024  # 8 GB
     min_compute_capability = 7.0  # CUDA compute capability 7.0 or higher
     # Check if the GPU meets the minimum requirements
     if gpu_info["memory_total"] < min_memory:
-        print(f"Error: GPU has {gpu_info['memory_total'] / 1024} GB of memory, which is less than the minimum requirement of {min_memory / 1024} GB")
+        if startup:
+            print(f"Error: GPU has {gpu_info['memory_total'] / 1024} GB of memory, which is less than the minimum requirement of {min_memory / 1024} GB")
         return False
     if gpu_info["compute_capability"] < min_compute_capability:
-        print(f"Error: GPU has compute capability {gpu_info['compute_capability']}, which is less than the minimum requirement of {min_compute_capability}")
+        if startup:
+            print(f"Error: GPU has compute capability {gpu_info['compute_capability']}, which is less than the minimum requirement of {min_compute_capability}")
         return False
     return True
 

@@ -2,7 +2,7 @@ from langchain_community.llms import LlamaCpp
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 from huggingface_hub import hf_hub_download
-import startup_functions
+import llm_utils
 
 
 def load_llm():
@@ -13,7 +13,7 @@ def load_llm():
 
 def instantiate_llm(path):
     # Load the LlamaCpp language model, adjust GPU usage based on your hardware
-    n = startup_functions.llm_gpu_layers()
+    n = llm_utils.llm_gpu_layers()
     llm = LlamaCpp(
         model_path=path,
         n_gpu_layers=n,
