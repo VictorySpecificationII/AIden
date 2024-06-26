@@ -6,9 +6,9 @@ def speech_to_text():
         print('Say Something:')
         audio = r.listen(source)
         print ('Done')
-    text = r.recognize_google(audio, language = 'en-GB')
+    text = r.recognize_sphinx(audio, language = 'en-GB')
     print(text)
-    print(r.recognize_google(audio))
+    print(r.recognize_sphinx(audio))
     return text
 
 def main():
