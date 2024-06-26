@@ -4,6 +4,7 @@ import openai
 import mistral_onboard_llm
 import llama2_onboard_llm
 import gpu_utils
+import net_utils
 
 
 def print_banner():
@@ -43,7 +44,7 @@ def check_local_llm_availability():
     if (llama2_found or mistral_found):
         return True
     else:
-        print(f"LLM's not found in ~/.chache/huggingface/hub directory. Exiting...")
+        print(f"LLM's not found in ~/.chache/huggingface/hub directory.")
         return False
 
 def check_local_gpu_availability():
@@ -52,3 +53,6 @@ def check_local_gpu_availability():
         return False
     else:
         return True
+
+def check_local_internet_connection():
+    net_utils.check_internet_connection()
