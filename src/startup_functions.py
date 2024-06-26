@@ -3,6 +3,8 @@ import os
 import openai
 import mistral_onboard_llm
 import llama2_onboard_llm
+import GPUtil
+
 
 def print_banner():
     ascii_art = """
@@ -41,7 +43,7 @@ def check_local_llm_availability():
     if (llama2_found or mistral_found):
         return True
     else:
-        print(f"LLM's not found in ~/.chache/huggingface/hub directory. Exiting...") 
-        exit(0)
+        print(f"LLM's not found in ~/.chache/huggingface/hub directory. Exiting...")
+        return False
     
 
