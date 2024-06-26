@@ -4,7 +4,7 @@ import openai
 import mistral_onboard_llm
 import llama2_onboard_llm
 import gpu_utils
-import net_utils
+import requests
 
 
 def print_banner():
@@ -55,4 +55,11 @@ def check_local_gpu_availability():
         return True
 
 def check_local_internet_connection():
-    net_utils.check_internet_connection()
+    print("Startup Check: Checking Internet connectivity on host...")
+    try:
+        requests.get("https://www.google.com", timeout=5)
+        print(f"Success: Internet connectivity enabled.")
+        return True
+    except requests.ConnectionError:
+        print("Error: No internet connection.")
+        return False
