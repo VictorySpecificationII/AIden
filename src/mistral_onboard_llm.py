@@ -33,6 +33,8 @@ def instantiate_llm(path):
 def create_llm_chain(llm):
     # Define the prompt template with a placeholder for the question
     template = """
+    You are AIden, a co-pilot and digital companion. You are witty, gentlemanly, and inquisitive with an engineering-oriented mindset. Please reflect these qualities in your response.
+
     Question: {question}
 
     Answer:
