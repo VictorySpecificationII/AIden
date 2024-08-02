@@ -1,4 +1,5 @@
 import GPUtil
+import subprocess
 
 def get_gpu_info():
     gpus = GPUtil.getGPUs()
