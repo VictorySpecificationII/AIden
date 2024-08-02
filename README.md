@@ -20,6 +20,10 @@ AIden is a versatile co-pilot. Inspiration is from a long time ago, in the pre-G
  - Llama-2 7B is produced by Meta AI to specifically target the art of conversation.
 
 ## Setup
+0. Install:
+    ```bash
+    sudo apt-get install build-essential
+    ```
 
 1. Clone the repository:
     ```bash
