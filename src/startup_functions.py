@@ -1,12 +1,23 @@
-from dotenv import load_dotenv
+"""
+This module contains startup utility functions for an AI Co-Pilot application.
+
+Functions:
+- print_banner(): Prints a welcome banner at startup.
+- check_local_llm_availability(): Checks if the necessary LLM models are available locally, downloads them if not.
+- check_local_internet_connection(): Checks for an active internet connection.
+"""
+
 import os
-import openai
+import requests
 import mistral_onboard_llm
 import llama2_onboard_llm
-import requests
+
 
 
 def print_banner():
+    '''
+    Prints a banner at startup.
+    '''
     ascii_art = """
         _    ___    _            
        / \  |_ _|__| | ___ _ __  
@@ -20,6 +31,9 @@ def print_banner():
     print(ascii_art)
 
 def check_local_llm_availability():
+    '''
+    Checks whether the LLM models are available locally, and if not - downloads them.
+    '''
     print("Startup Check: Checking LLM models in ~/.cache/huggingface/hub...")
     # Get the paths to the model files
     mistral_path = mistral_onboard_llm.load_llm()
@@ -39,7 +53,6 @@ def check_local_llm_availability():
     else:
         print(f"Success: Llama2 model file found at {llama2_path}.")
         llama2_found = True
-    
     if (llama2_found or mistral_found):
         return True
     else:
@@ -47,6 +60,9 @@ def check_local_llm_availability():
         return False
 
 def check_local_internet_connection():
+    '''
+    Checks for internet connectivity.
+    '''
     print("Startup Check: Checking Internet connectivity on host...")
     try:
         requests.get("https://www.google.com", timeout=5)
