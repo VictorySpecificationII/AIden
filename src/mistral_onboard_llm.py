@@ -20,14 +20,14 @@ def load_llm():
     Load and return the path to the LLM model.
     """
     ## Define model name and file name
-    # model_name = "TheBloke/Mixtral-8x7B-Instruct-v0.1-GGUF"
+    # llm_model_name = "TheBloke/Mixtral-8x7B-Instruct-v0.1-GGUF"
     # model_file = "mixtral-8x7b-instruct-v0.1.Q4_K_M.gguf"
-    ## Use the following model_name and model_file if you have 8gb ram or less
-    model_name = "TheBloke/Mistral-7B-OpenOrca-GGUF"
+    ## Use the following llm_model_name and model_file if you have 8gb ram or less
+    llm_model_name = "TheBloke/Mistral-7B-OpenOrca-GGUF"
     model_file = "mistral-7b-openorca.Q4_K_M.gguf"
-    model_path = hf_hub_download(model_name, filename=model_file)
-    ## Use the following model_name and model_file if you have 16gb ram or less
-    # model_name = "TTheBloke/vicuna-13B-v1.5-16K-GGUF"
+    model_path = hf_hub_download(llm_model_name, filename=model_file)
+    ## Use the following llm_model_name and model_file if you have 16gb ram or less
+    # llm_model_name = "TTheBloke/vicuna-13B-v1.5-16K-GGUF"
     # model_file = "vicuna-13b-v1.5-16k.Q4_K_M.gguf"
 
     return model_path

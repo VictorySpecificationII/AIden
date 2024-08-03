@@ -9,7 +9,7 @@ def test_load_mistral_model():
     """
     Test loading the Mistral model.
     """
-    response = client.post("/load_model", json={"model_name": "mistral"})
+    response = client.post("/load_model", json={"llm_model_name": "mistral"})
     assert response.status_code == 200
     assert response.json() == {"message": "Mistral model loaded successfully"}
 
@@ -17,7 +17,7 @@ def test_load_llama2_model():
     """
     Test loading the Llama2 model.
     """
-    response = client.post("/load_model", json={"model_name": "llama2"})
+    response = client.post("/load_model", json={"llm_model_name": "llama2"})
     assert response.status_code == 200
     assert response.json() == {"message": "Llama2 model loaded successfully"}
 
@@ -25,7 +25,7 @@ def test_load_invalid_model():
     """
     Test loading an invalid model.
     """
-    response = client.post("/load_model", json={"model_name": "invalid_model"})
+    response = client.post("/load_model", json={"llm_model_name": "invalid_model"})
     assert response.status_code == 400
     assert response.json() == {"detail": "Invalid model name specified"}
 
@@ -46,7 +46,7 @@ def test_ask_question_mistral():
     Test asking a question with the Mistral model loaded.
     """
     # Load the Mistral model first
-    client.post("/load_model", json={"model_name": "mistral"})
+    client.post("/load_model", json={"llm_model_name": "mistral"})
 
     response = client.post("/ask", json={"question": "What is AI?"})
     assert response.status_code == 200
@@ -58,7 +58,7 @@ def test_ask_question_llama2():
     Test asking a question with the Llama2 model loaded.
     """
     # Load the Llama2 model first
-    client.post("/load_model", json={"model_name": "llama2"})
+    client.post("/load_model", json={"llm_model_name": "llama2"})
 
     response = client.post("/ask", json={"question": "What is the capital of France?"})
     assert response.status_code == 200
@@ -81,7 +81,7 @@ def test_status_with_model_loaded():
     Test status endpoint with a model loaded.
     """
     # Load the Llama2 model for this test
-    client.post("/load_model", json={"model_name": "llama2"})
+    client.post("/load_model", json={"llm_model_name": "llama2"})
 
     response = client.get("/status")
     assert response.status_code == 200

@@ -16,7 +16,7 @@ class QuestionRequest(BaseModel):
 
 # Request model for loading models
 class LoadModelRequest(BaseModel):
-    model_name: Optional[str] = None
+    llm_model_name: Optional[str] = None
 
 @app.post("/load_model")
 def load_model(request: LoadModelRequest):
@@ -26,13 +26,13 @@ def load_model(request: LoadModelRequest):
     global current_model, current_llm_chain
 
     try:
-        if request.model_name == "mistral":
+        if request.llm_model_name == "mistral":
             model_path = mistral_onboard_llm.load_llm()
             llm = mistral_onboard_llm.instantiate_llm(model_path)
             current_llm_chain = mistral_onboard_llm.create_llm_chain(llm)
             current_model = "mistral"
             return {"message": "Mistral model loaded successfully"}
-        elif request.model_name == "llama2":
+        elif request.llm_model_name == "llama2":
             model_path = llama2_onboard_llm.load_llm()
             llm = llama2_onboard_llm.instantiate_llm(model_path)
             current_llm_chain = llama2_onboard_llm.create_llm_chain(llm)

@@ -19,9 +19,9 @@ def load_llm():
     """
     Load and return the path to the LLM model.
     """
-    model_name = "TheBloke/Llama-2-7B-Chat-GGUF"
+    llm_model_name = "TheBloke/Llama-2-7B-Chat-GGUF"
     model_file = "llama-2-7b-chat.Q4_0.gguf"
-    model_path = hf_hub_download(model_name, filename=model_file)
+    model_path = hf_hub_download(llm_model_name, filename=model_file)
     return model_path
 
 def instantiate_llm(path):
