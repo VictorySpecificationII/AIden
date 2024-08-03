@@ -22,7 +22,7 @@ AIden is a versatile co-pilot. Inspiration is from a long time ago, in the pre-G
 ## Setup
 0. Install:
     ```bash
-    sudo apt-get install build-essential
+    sudo apt-get install build-essential python3.10-dev portaudio19-dev
     ```
 
 1. Clone the repository:

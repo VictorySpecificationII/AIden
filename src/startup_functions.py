@@ -3,7 +3,6 @@ import os
 import openai
 import mistral_onboard_llm
 import llama2_onboard_llm
-import gpu_utils
 import requests
 
 
@@ -46,13 +45,6 @@ def check_local_llm_availability():
     else:
         print(f"LLM's not found in ~/.chache/huggingface/hub directory.")
         return False
-
-def check_local_gpu_availability():
-    gpu_info = gpu_utils.get_gpu_info()
-    if not gpu_utils.check_gpu_compatibility(gpu_info, True):
-        return False
-    else:
-        return True
 
 def check_local_internet_connection():
     print("Startup Check: Checking Internet connectivity on host...")

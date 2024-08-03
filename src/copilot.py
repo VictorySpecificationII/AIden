@@ -26,7 +26,6 @@ def interactive_chat():
 if __name__ == "__main__":
     startup_functions.print_banner()
     startup_functions.check_local_llm_availability()
-    startup_functions.check_local_gpu_availability()
     startup_functions.check_local_internet_connection()
     print_divider()
     interactive_chat()
