@@ -1,9 +1,8 @@
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 import startup_functions
 import mistral_onboard_llm
 import llama2_onboard_llm
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import Optional
 
 # Define request model
 class QuestionRequest(BaseModel):
