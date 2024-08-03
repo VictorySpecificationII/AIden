@@ -23,6 +23,7 @@ httpcore==1.0.5
 httpx==0.27.0
 huggingface-hub==0.24.5
 idna==3.7
+iniconfig==2.0.0
 Jinja2==3.1.4
 jsonpatch==1.33
 jsonpointer==3.0.0
@@ -40,9 +41,11 @@ numpy==1.26.4
 openai==1.37.1
 orjson==3.10.6
 packaging==24.1
+pluggy==1.5.0
 PyAudio==0.2.14
 pydantic==2.8.2
 pydantic_core==2.20.1
+pytest==8.3.2
 python-dotenv==1.0.1
 PyYAML==6.0.1
 requests==2.32.3
@@ -51,6 +54,7 @@ SpeechRecognition==3.10.4
 SQLAlchemy==2.0.31
 starlette==0.37.2
 tenacity==8.5.0
+tomli==2.0.1
 tqdm==4.66.4
 typing-inspect==0.9.0
 typing_extensions==4.12.2
