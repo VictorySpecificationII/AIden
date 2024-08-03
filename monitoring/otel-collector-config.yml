@@ -17,6 +17,8 @@ processors:
 exporters:
   prometheusremotewrite:
     endpoint: "http://prometheus:9090/api/v1/write"
+  otlphttp:
+    endpoint: http://loki:3100/otlp/v1/logs
 
 service:
   pipelines:
@@ -24,9 +26,11 @@ service:
       receivers: [otlp, prometheus]
       processors: [batch]
       exporters: [prometheusremotewrite]
-    # traces:
-    #   receivers: [otlp]
-    #   processors: [batch]
-    # logs:
-    #   receivers: [otlp]
-    #   processors: [batch]
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp]
