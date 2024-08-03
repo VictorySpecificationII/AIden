@@ -1,3 +1,12 @@
+"""
+This module provides endpoints for interacting with different language models
+using FastAPI.
+
+Endpoints:
+- POST /ask/mistral: Handles questions and provides answers using the Mistral LLM.
+- POST /ask/llama2: Handles questions and provides answers using the Llama2 LLM.
+"""
+
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import startup_functions
@@ -6,6 +15,9 @@ import llama2_onboard_llm
 
 # Define request model
 class QuestionRequest(BaseModel):
+    """
+    Model for parsing the question request body.
+    """
     question: str
 
 # Initialize FastAPI app
@@ -13,7 +25,16 @@ app = FastAPI()
 
 # Define the /ask route
 @app.post("/ask/mistral")
-def ask_question(request: QuestionRequest):
+def ask_question_mistral(request: QuestionRequest):
+    """
+    Handles POST requests to /ask/mistral and provides answers using the Mistral LLM.
+
+    Args:
+        request (QuestionRequest): The request containing the question.
+
+    Returns:
+        dict: A dictionary with the question and its answer.
+    """
     question = request.question
 
     if not question:
@@ -28,7 +49,16 @@ def ask_question(request: QuestionRequest):
 
 # Define the /ask route
 @app.post("/ask/llama2")
-def ask_question(request: QuestionRequest):
+def ask_question_llama2(request: QuestionRequest):
+    """
+    Handles POST requests to /ask/llama2 and provides answers using the Llama2 LLM.
+
+    Args:
+        request (QuestionRequest): The request containing the question.
+
+    Returns:
+        dict: A dictionary with the question and its answer.
+    """
     question = request.question
 
     if not question:
