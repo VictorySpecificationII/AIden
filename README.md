@@ -2,18 +2,6 @@
 
 AIden is a versatile co-pilot. Inspiration is from a long time ago, in the pre-GPT era.
 
-## Features
-
-- Retrieval-augmented generation using LlamaIndex and LangChain.
-- Interacts with external APIs (e.g., weather API)
-- Customized to understand personal preferences and information
-- Multimodal:
-    - Access to camera for vision capabilities
-    - Access to microphone for hearing capabilities
-    - Access to sensors for sensory input
-- Portable, can run on the edge
-- Offline capabilities (text/voice only)
-
 ### Models Used
 
  - Mistral 7B: The Mistral LLM is a versatile language model, excelling at tasks like reasoning, comprehension, tackling STEM problems, and even coding.
@@ -42,23 +30,22 @@ AIden is a versatile co-pilot. Inspiration is from a long time ago, in the pre-G
     pip install -r requirements.txt
     ```
 
-4. Set up your API keys and environment variables. Create a copy of the `env` file in the root directory, name it `.env` and add your keys:
-    ```env
-    WEATHER_API_KEY=your_api_key_here
-    ```
-
 ## Usage
 
 Run the main script:
 ```bash
 python src/copilot.py
 ```
-
+Issue a question to the bot:
+```bash
+curl -X POST "http://localhost:8000/ask/llama2" -H "Content-Type: application/json" -d '{"question": "What is AI?"}'
+curl -X POST "http://localhost:8000/ask/mistral" -H "Content-Type: application/json" -d '{"question": "What is AI?"}'
+```
 In order to run the testing suite, navigate to the root of the project and run:
 ```bash
 pytest
 ```
+
 # Sources
 
  - https://nanonets.com/blog/langchain/
- - https://github.com/KoljaB/RealtimeSTT for the real time speech transcription module
