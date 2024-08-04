@@ -1,88 +1,58 @@
 import pytest
 from fastapi.testclient import TestClient
-from src.aiden import app  # Replace 'your_module_name' with the actual module name
+from src.aiden import app  # Adjust the import based on your application structure
 
-# Initialize the TestClient with your FastAPI app
 client = TestClient(app)
 
-def test_load_mistral_model():
-    """
-    Test loading the Mistral model.
-    """
-    response = client.post("/load_model", json={"llm_model_name": "mistral"})
+@pytest.fixture(scope="module")
+def setup():
+    # Setup actions before tests
+    # You might want to set up some data or configurations
+    yield
+    # Teardown actions after tests
+    # Clean up resources, if needed
+
+def test_download_models(setup):
+    response = client.get("/download-models")
     assert response.status_code == 200
-    assert response.json() == {"message": "Mistral model loaded successfully"}
+    data = response.json()
+    assert "model_paths" in data
+    assert data["model_paths"]["mistral"] is not None
+    assert data["model_paths"]["llama2"] is not None
 
-def test_load_llama2_model():
-    """
-    Test loading the Llama2 model.
-    """
-    response = client.post("/load_model", json={"llm_model_name": "llama2"})
+def test_check_downloaded_models(setup):
+    # Assuming models have been downloaded
+    response = client.get("/check-downloaded-models?model_name=mistral")
     assert response.status_code == 200
-    assert response.json() == {"message": "Llama2 model loaded successfully"}
+    data = response.json()
+    assert data["status"] == "model downloaded"
 
-def test_load_invalid_model():
-    """
-    Test loading an invalid model.
-    """
-    response = client.post("/load_model", json={"llm_model_name": "invalid_model"})
-    assert response.status_code == 400
-    assert response.json() == {"detail": "Invalid model name specified"}
-
-def test_ask_question_no_model_loaded():
-    """
-    Test asking a question when no model is loaded.
-    """
-    # First, ensure no model is loaded
-    global current_llm_chain
-    current_llm_chain = None  # Manually set to None for testing
-
-    response = client.post("/ask", json={"question": "What is AI?"})
-    assert response.status_code == 503
-    assert response.json() == {"detail": "No model is currently loaded"}
-
-def test_ask_question_mistral():
-    """
-    Test asking a question with the Mistral model loaded.
-    """
-    # Load the Mistral model first
-    client.post("/load_model", json={"llm_model_name": "mistral"})
-
-    response = client.post("/ask", json={"question": "What is AI?"})
+def test_load_llm(setup):
+    response = client.get("/load-llm?model_name=mistral")
     assert response.status_code == 200
-    assert "question" in response.json()
-    assert "answer" in response.json()
+    data = response.json()
+    assert "model_path" in data
 
-def test_ask_question_llama2():
-    """
-    Test asking a question with the Llama2 model loaded.
-    """
-    # Load the Llama2 model first
-    client.post("/load_model", json={"llm_model_name": "llama2"})
+def test_instantiate_llm(setup):
+    response = client.post("/instantiate-llm")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "LLM instantiated"
 
+def test_create_llm_chain(setup):
+    response = client.post("/create-llm-chain")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "LLMChain created"
+
+def test_ask_question(setup):
     response = client.post("/ask", json={"question": "What is the capital of France?"})
     assert response.status_code == 200
-    assert "question" in response.json()
-    assert "answer" in response.json()
+    data = response.json()
+    assert "answer" in data
 
-def test_status_no_model_loaded():
-    """
-    Test status endpoint when no model is loaded.
-    """
-    global current_model
-    current_model = None  # Ensure no model is set
-
-    response = client.get("/status")
+def test_get_current_model_in_memory(setup):
+    response = client.get("/get_current_model_in_memory")
     assert response.status_code == 200
-    assert response.json() == {"model": None, "status": "no model loaded"}
-
-def test_status_with_model_loaded():
-    """
-    Test status endpoint with a model loaded.
-    """
-    # Load the Llama2 model for this test
-    client.post("/load_model", json={"llm_model_name": "llama2"})
-
-    response = client.get("/status")
-    assert response.status_code == 200
-    assert response.json() == {"model": "llama2", "status": "loaded"}
+    data = response.json()
+    assert "model" in data
