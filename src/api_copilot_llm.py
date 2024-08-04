@@ -1,70 +1,98 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from typing import Optional
-import mistral_onboard_llm
-import llama2_onboard_llm
-from opentelemetry import trace
-import os
+from langchain_community.llms import LlamaCpp
+from langchain.prompts import PromptTemplate
+from langchain.chains import LLMChain
+from huggingface_hub import hf_hub_download
 
-# Global variables to store the current model and LLMChain
-current_model = None
-current_llm_chain = None
+# Global variables to store model path, LLM instance, and LLM chain
+global current_model, current_llm_chain
+model_path = None
+llm = None
+llm_chain = None
 
-# Request model for asking questions
-class QuestionRequest(BaseModel):
-    question: str
-
-# Request model for loading models
-class LoadModelRequest(BaseModel):
-    llm_model_name: Optional[str] = None
-
-# Initialize a FastAPI router
 router = APIRouter()
 
-@router.post("/load_model")
-def load_model(request: LoadModelRequest):
-    """
-    Endpoint to load or reload models.
-    """
-    global current_model, current_llm_chain
+class Question(BaseModel):
+    question: str
 
+@router.get("/load-llm")
+def load_llm():
+    """
+    Load and return the path to the LLM model.
+    """
+    global model_path
     try:
-        if request.llm_model_name == "mistral":
-            model_path = mistral_onboard_llm.load_llm()
-            llm = mistral_onboard_llm.instantiate_llm(model_path)
-            current_llm_chain = mistral_onboard_llm.create_llm_chain(llm)
-            current_model = "mistral"
-            return {"message": "Mistral model loaded successfully"}
-        elif request.llm_model_name == "llama2":
-            model_path = llama2_onboard_llm.load_llm()
-            llm = llama2_onboard_llm.instantiate_llm(model_path)
-            current_llm_chain = llama2_onboard_llm.create_llm_chain(llm)
-            current_model = "llama2"
-            return {"message": "Llama2 model loaded successfully"}
-        else:
-            raise HTTPException(status_code=400, detail="Invalid model name specified")
+        llm_model_name = "TheBloke/Mistral-7B-OpenOrca-GGUF"
+        model_file = "mistral-7b-openorca.Q4_K_M.gguf"
+        model_path = hf_hub_download(llm_model_name, filename=model_file)
+        return {"model_path": model_path}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to load model: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/instantiate-llm")
+def instantiate_llm():
+    """
+    Instantiate the LLM with the path loaded from /load-llm.
+    """
+    global llm
+    if model_path is None:
+        raise HTTPException(status_code=400, detail="Model path not loaded. Call /load-llm first.")
+    
+    try:
+        llm = LlamaCpp(
+            model_path=model_path,
+            n_gpu_layers=0,
+            n_batch=512,
+            verbose=False,
+        )
+        return {"status": "LLM instantiated"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/create-llm-chain")
+def create_llm_chain():
+    """
+    Create an LLMChain using the instantiated LLM.
+    """
+    global llm_chain
+    if llm is None:
+        raise HTTPException(status_code=400, detail="LLM not instantiated. Call /instantiate-llm first.")
+    
+    try:
+        template = """
+        You are AIden, a co-pilot and digital companion. You are witty, gentlemanly, and inquisitive with an engineering-oriented mindset. Please reflect these qualities in your response.
+
+        Question: {question}
+
+        Answer:
+        """
+        prompt = PromptTemplate(template=template, input_variables=["question"])
+        llm_chain = LLMChain(prompt=prompt, llm=llm)
+        return {"status": "LLMChain created"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/ask")
-def ask_question(request: QuestionRequest):
+async def ask_question(data: Question):
     """
-    Endpoint to ask questions to the currently loaded model.
+    Handle the POST request to answer a question using the LLM.
+    
+    Args:
+        data (Question): The question to ask the LLM.
+    
+    Returns:
+        dict: The answer from the LLM.
     """
-    global current_llm_chain
-
-    if current_llm_chain is None:
-        raise HTTPException(status_code=503, detail="No model is currently loaded")
-
-    question = request.question
-    if not question:
-        raise HTTPException(status_code=400, detail="No question provided")
-
+    global llm_chain
+    if llm_chain is None:
+        raise HTTPException(status_code=400, detail="LLMChain not created. Call /create-llm-chain first.")
+    
     try:
-        answer = current_llm_chain.run(question)
-        return {"question": question, "answer": answer}
+        answer = llm_chain.run(data.question)
+        return {"answer": answer}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing question: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Optional: An endpoint to check the status of the loaded model
 @router.get("/status")
@@ -76,32 +104,3 @@ def get_status():
         return {"model": current_model, "status": "loaded"}
     else:
         return {"model": None, "status": "no model loaded"}
-    
-# API endpoint to check LLM availability
-@router.get("/check_llm_presence")
-def api_check_llm_presence():
-    '''
-    Checks whether the LLM models are available locally, and if not - downloads them.
-    '''
-    '''
-    Checks whether the LLM models are available locally.
-    '''
-    # Get the paths to the model files
-    mistral_path = mistral_onboard_llm.load_llm()
-    llama2_path = llama2_onboard_llm.load_llm()
-
-    # Check if the model files exist
-    mistral_found = os.path.isfile(mistral_path)
-    llama2_found = os.path.isfile(llama2_path)
-
-    # Determine which models are found
-    found_models = []
-    if mistral_found:
-        found_models.append("Mistral")
-    if llama2_found:
-        found_models.append("Llama2")
-
-    if found_models:
-        return {"message": "LLMs found.", "found_models": found_models}
-    else:
-        raise HTTPException(status_code=404, detail="LLMs not found.")

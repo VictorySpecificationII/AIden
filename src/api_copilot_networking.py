@@ -17,9 +17,6 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
-import mistral_onboard_llm
-import llama2_onboard_llm
-
 # Initialize TracerProvider and SpanProcessor
 trace.set_tracer_provider(TracerProvider())
 trace.get_tracer_provider().add_span_processor(
