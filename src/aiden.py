@@ -6,7 +6,7 @@ app = FastAPI()
 
 # Include the api routers
 app.include_router(startup_router, prefix="/networking")
-app.include_router(llm_router, prefix="/llm")
+app.include_router(llm_router, prefix="/llm-text")
 
 if __name__ == "__main__":
     import uvicorn
