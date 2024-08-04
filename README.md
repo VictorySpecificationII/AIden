@@ -32,9 +32,14 @@ AIden is a versatile co-pilot. Inspiration is from a long time ago, in the pre-G
 
 ## Usage
 
-Run the main script:
+Launch a terminal, copy the docker command in the monitoring/README.md file and execute it. 
+```
+IMPORTANT: The app won't run without it.
+```
+
+Run the main script, in another terminal:
 ```bash
-python src/copilot.py
+python src/aiden.py
 ```
 Interact with the API at:
 ```
