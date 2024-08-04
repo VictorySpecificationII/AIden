@@ -1,6 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from src.api_copilot_llm import app  # Replace 'your_module_name' with the actual module name
+from src.aiden import app  # Replace 'your_module_name' with the actual module name
 
 # Initialize the TestClient with your FastAPI app
 client = TestClient(app)
