@@ -29,6 +29,10 @@ def load_llm():
         model_file = "mistral-7b-openorca.Q4_K_M.gguf"
         model_path = hf_hub_download(llm_model_name, filename=model_file)
         current_model_name = "mistral"
+        #llm_model_name = "TheBloke/Llama-2-7B-Chat-GGUF"
+        #model_file = "llama-2-7b-chat.Q4_0.gguf"
+        # model_path = hf_hub_download(llm_model_name, filename=model_file)
+        #current_model_name = "llama2"
         return {"model_path": model_path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
