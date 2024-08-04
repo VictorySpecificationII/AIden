@@ -6,10 +6,10 @@ from langchain.chains import LLMChain
 from huggingface_hub import hf_hub_download
 
 # Global variables to store model path, LLM instance, and LLM chain
-global current_model, current_llm_chain
 model_path = None
 llm = None
 llm_chain = None
+current_model_name = None
 
 router = APIRouter()
 
@@ -22,10 +22,13 @@ def load_llm():
     Load and return the path to the LLM model.
     """
     global model_path
+    global current_model_name
+
     try:
         llm_model_name = "TheBloke/Mistral-7B-OpenOrca-GGUF"
         model_file = "mistral-7b-openorca.Q4_K_M.gguf"
         model_path = hf_hub_download(llm_model_name, filename=model_file)
+        current_model_name = "mistral"
         return {"model_path": model_path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -95,11 +98,12 @@ async def ask_question(data: Question):
         raise HTTPException(status_code=500, detail=str(e))
 
 # Optional: An endpoint to check the status of the loaded model
-@router.get("/status")
-def get_status():
+@router.get("/get_current_model_in_memory")
+def get_current_model_in_memory():
     """
     Endpoint to get the current status of the loaded model.
     """
+    current_model = current_model_name
     if current_model:
         return {"model": current_model, "status": "loaded"}
     else:
