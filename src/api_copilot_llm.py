@@ -43,7 +43,7 @@ async def startup_event():
     """
     load_model_paths()
 
-@router.get("/download-models")
+@router.get("/download-models", tags=["LLM Management | Text Models"])
 def download_models():
     """
     Download the model files from the Hugging Face hub.
@@ -69,7 +69,7 @@ def download_models():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/check-downloaded-models")
+@router.get("/check-downloaded-models", tags=["LLM Management | Text Models"])
 def check_downloaded_models(model_name: str):
     """
     Check if the model file has been downloaded.
@@ -86,7 +86,7 @@ def check_downloaded_models(model_name: str):
     else:
         return {"status": "model not downloaded"}
 
-@router.get("/load-llm")
+@router.get("/load-llm", tags=["LLM Management | Text Models"])
 def load_llm(model_name: str):
     """
     Load and return the path to the LLM model.
@@ -110,7 +110,7 @@ def load_llm(model_name: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/switch-model")
+@router.post("/switch-model", tags=["LLM Management | Text Models"])
 def switch_model(model_name: str):
     """
     Switch the current active model to the specified model.
@@ -142,7 +142,7 @@ def switch_model(model_name: str):
     current_model_name = model_name
     return {"status": f"Switched to model {model_name}", "model_path": model_path}
 
-@router.post("/instantiate-llm")
+@router.post("/instantiate-llm", tags=["LLM Management | Text Models"])
 def instantiate_llm():
     """
     Instantiate the LLM with the path loaded from /load-llm.
@@ -169,7 +169,7 @@ def instantiate_llm():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/create-llm-chain")
+@router.post("/create-llm-chain", tags=["LLM Management | Text Models"])
 def create_llm_chain():
     """
     Create an LLMChain using the instantiated LLM.
@@ -192,7 +192,7 @@ def create_llm_chain():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/ask")
+@router.post("/ask", tags=["LLM Management | Text Models"])
 async def ask_question(data: Question):
     """
     Handle the POST request to answer a question using the LLM.
@@ -213,7 +213,7 @@ async def ask_question(data: Question):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/get_current_model_in_memory")
+@router.get("/get_current_model_in_memory", tags=["LLM Management | Text Models"])
 def get_current_model_in_memory():
     """
     Endpoint to get the current status of the loaded model.

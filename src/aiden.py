@@ -5,8 +5,8 @@ from api_copilot_llm import router as llm_router
 app = FastAPI()
 
 # Include the api routers
-app.include_router(startup_router)
-app.include_router(llm_router)
+app.include_router(startup_router, prefix="/networking")
+app.include_router(llm_router, prefix="/llm")
 
 if __name__ == "__main__":
     import uvicorn
