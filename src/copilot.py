@@ -84,5 +84,5 @@ if __name__ == "__main__":
     check_local_internet_connection()
 
     # Start the FastAPI server
-    print("Starting the FastAPI server...")
+    print("Starting AIden's FastAPI server...")
     uvicorn.run(app, host="0.0.0.0", port=8000)
