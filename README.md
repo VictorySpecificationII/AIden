@@ -36,11 +36,16 @@ Run the main script:
 ```bash
 python src/copilot.py
 ```
-Issue a question to the bot:
-```bash
-curl -X POST "http://localhost:8000/ask/llama2" -H "Content-Type: application/json" -d '{"question": "What is AI?"}'
-curl -X POST "http://localhost:8000/ask/mistral" -H "Content-Type: application/json" -d '{"question": "What is AI?"}'
+Interact with the API at:
 ```
+localhost:8000/docs
+```
+
+API documentation at:
+```
+localhost:8000/redoc
+```
+
 In order to run the testing suite, navigate to the root of the project and run:
 ```bash
 pytest
