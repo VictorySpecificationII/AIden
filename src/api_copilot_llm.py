@@ -4,38 +4,143 @@ from langchain_community.llms import LlamaCpp
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 from huggingface_hub import hf_hub_download
+import os
+import json
 
-# Global variables to store model path, LLM instance, and LLM chain
-model_path = None
+# Global variables to store model paths, LLM instance, and LLM chain
+model_paths = {"mistral": None, "llama2": None}
 llm = None
 llm_chain = None
 current_model_name = None
+model_paths_file = "model_paths.json"
 
 router = APIRouter()
 
 class Question(BaseModel):
     question: str
 
-@router.get("/load-llm")
-def load_llm():
+def load_model_paths():
     """
-    Load and return the path to the LLM model.
+    Load model paths from a file if it exists.
     """
-    global model_path
+    global model_paths
+    if os.path.exists(model_paths_file):
+        with open(model_paths_file, "r") as file:
+            model_paths = json.load(file)
+
+def save_model_paths():
+    """
+    Save model paths to a file.
+    """
+    global model_paths
+    with open(model_paths_file, "w") as file:
+        json.dump(model_paths, file)
+
+@router.on_event("startup")
+async def startup_event():
+    """
+    Load model paths when the application starts.
+    """
+    load_model_paths()
+
+@router.get("/download-models")
+def download_models():
+    """
+    Download the model files from the Hugging Face hub.
+    """
+    global model_paths
     global current_model_name
 
     try:
-        llm_model_name = "TheBloke/Mistral-7B-OpenOrca-GGUF"
-        model_file = "mistral-7b-openorca.Q4_K_M.gguf"
-        model_path = hf_hub_download(llm_model_name, filename=model_file)
-        current_model_name = "mistral"
-        #llm_model_name = "TheBloke/Llama-2-7B-Chat-GGUF"
-        #model_file = "llama-2-7b-chat.Q4_0.gguf"
-        # model_path = hf_hub_download(llm_model_name, filename=model_file)
-        #current_model_name = "llama2"
+        # Download Mistral model
+        mistral_model_name = "TheBloke/Mistral-7B-OpenOrca-GGUF"
+        mistral_model_file = "mistral-7b-openorca.Q4_K_M.gguf"
+        model_paths["mistral"] = hf_hub_download(mistral_model_name, filename=mistral_model_file)
+
+        # Download Llama-2 model
+        llama2_model_name = "TheBloke/Llama-2-7B-Chat-GGUF"
+        llama2_model_file = "llama-2-7b-chat.Q4_0.gguf"
+        model_paths["llama2"] = hf_hub_download(llama2_model_name, filename=llama2_model_file)
+
+        # Save model paths to file
+        save_model_paths()
+
+        return {"model_paths": model_paths}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/check-downloaded-models")
+def check_downloaded_models(model_name: str):
+    """
+    Check if the model file has been downloaded.
+
+    Args:
+        model_name (str): The name of the model to check. It should be 'mistral' or 'llama2'.
+    """
+    if model_name not in model_paths:
+        raise HTTPException(status_code=400, detail="Invalid model name. Use 'mistral' or 'llama2'.")
+
+    model_path = model_paths.get(model_name)
+    if model_path and os.path.exists(model_path):
+        return {"model_path": model_path, "status": "model downloaded"}
+    else:
+        return {"status": "model not downloaded"}
+
+@router.get("/load-llm")
+def load_llm(model_name: str):
+    """
+    Load and return the path to the LLM model.
+
+    Args:
+        model_name (str): The name of the model to load. It should be 'mistral' or 'llama2'.
+    """
+    global model_paths
+    global current_model_name
+
+    if model_name not in model_paths:
+        raise HTTPException(status_code=400, detail="Invalid model name. Use 'mistral' or 'llama2'.")
+
+    model_path = model_paths.get(model_name)
+    if model_path is None:
+        raise HTTPException(status_code=400, detail="Model not downloaded. Call /download-model first.")
+
+    try:
+        current_model_name = model_name
         return {"model_path": model_path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/switch-model")
+def switch_model(model_name: str):
+    """
+    Switch the current active model to the specified model.
+
+    Args:
+        model_name (str): The name of the model to switch to. It should be 'mistral' or 'llama2'.
+    """
+    global llm
+    global llm_chain
+    global current_model_name
+    global model_paths
+
+    if model_name not in model_paths:
+        raise HTTPException(status_code=400, detail="Invalid model name. Use 'mistral' or 'llama2'.")
+
+    model_path = model_paths.get(model_name)
+    if model_path is None or not os.path.exists(model_path):
+        raise HTTPException(status_code=400, detail="Model not downloaded. Call /download-model first.")
+
+    # Reset the LLM and LLMChain instances
+    llm = LlamaCpp(
+        model_path=model_path,
+        n_gpu_layers=0,
+        n_batch=512,
+        verbose=False,
+    )
+    llm_chain = None  # LLMChain will need to be recreated
+
+    current_model_name = model_name
+    return {"status": f"Switched to model {model_name}", "model_path": model_path}
 
 @router.post("/instantiate-llm")
 def instantiate_llm():
@@ -43,8 +148,15 @@ def instantiate_llm():
     Instantiate the LLM with the path loaded from /load-llm.
     """
     global llm
+    global model_paths
+    global current_model_name
+
+    if current_model_name is None:
+        raise HTTPException(status_code=400, detail="No model loaded. Call /load-llm first.")
+
+    model_path = model_paths.get(current_model_name)
     if model_path is None:
-        raise HTTPException(status_code=400, detail="Model path not loaded. Call /load-llm first.")
+        raise HTTPException(status_code=400, detail="Model path not found. Call /load-llm first.")
     
     try:
         llm = LlamaCpp(
@@ -101,7 +213,6 @@ async def ask_question(data: Question):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Optional: An endpoint to check the status of the loaded model
 @router.get("/get_current_model_in_memory")
 def get_current_model_in_memory():
     """
