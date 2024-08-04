@@ -2,11 +2,12 @@
 This module contains startup utility functions for an AI Co-Pilot application.
 
 Functions:
-- print_banner(): Prints a welcome banner at startup.
+- check_internet_connectivity(): Checks for an active internet connection.
 """
 
+import requests
 import logging
-
+from fastapi import APIRouter, HTTPException
 from opentelemetry import trace
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
@@ -15,6 +16,9 @@ from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+
+import mistral_onboard_llm
+import llama2_onboard_llm
 
 # Initialize TracerProvider and SpanProcessor
 trace.set_tracer_provider(TracerProvider())
@@ -44,21 +48,28 @@ logging.getLogger().addHandler(handler)
 # Create different namespaced loggers
 logger1 = logging.getLogger("aiden.startup")
 
+# Initialize a FastAPI router
+router = APIRouter()
+
 # Initialize tracer
 tracer = trace.get_tracer(__name__)
 
-def print_banner():
-    '''
-    Prints a banner at startup.
-    '''
-    ascii_art = """
-        _    ___    _            
-       / \  |_ _|__| | ___ _ __  
-      / _ \  | |/ _` |/ _ \ '_ \ 
-     / ___ \ | | (_| |  __/ | | |
-    /_/   \_\___\__,_|\___|_| |_|
-    
-   Artificial Intelligence Co-Pilot
+
+# API endpoint to check local internet connection
+@router.get("/check_internet_connectivity")
+def api_check_internet_connectivity():
     """
-    print(ascii_art)
-    logger1.info("Banner displayed.")
+    Endpoint to check internet connectivity.
+    """
+    with tracer.start_as_current_span("check_internet_connectivity"):
+        try:
+            is_connected = (lambda: requests.get("https://www.google.com", timeout=5).status_code == 200)()
+            if is_connected:
+                logger1.info("Internet connectivity enabled.")
+                return {"message": "Internet connectivity enabled."}
+            else:
+                logger1.error("No internet connection.")
+                raise HTTPException(status_code=503, detail="No internet connection.")
+        except requests.ConnectionError:
+            logger1.error("Failed to connect to the internet.")
+            raise HTTPException(status_code=503, detail="Failed to connect to the internet.")

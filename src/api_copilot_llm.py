@@ -1,10 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 import mistral_onboard_llm
 import llama2_onboard_llm
-
-app = FastAPI()
+from opentelemetry import trace
+import os
 
 # Global variables to store the current model and LLMChain
 current_model = None
@@ -18,7 +18,10 @@ class QuestionRequest(BaseModel):
 class LoadModelRequest(BaseModel):
     llm_model_name: Optional[str] = None
 
-@app.post("/load_model")
+# Initialize a FastAPI router
+router = APIRouter()
+
+@router.post("/load_model")
 def load_model(request: LoadModelRequest):
     """
     Endpoint to load or reload models.
@@ -43,7 +46,7 @@ def load_model(request: LoadModelRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to load model: {str(e)}")
 
-@app.post("/ask")
+@router.post("/ask")
 def ask_question(request: QuestionRequest):
     """
     Endpoint to ask questions to the currently loaded model.
@@ -64,7 +67,7 @@ def ask_question(request: QuestionRequest):
         raise HTTPException(status_code=500, detail=f"Error processing question: {str(e)}")
 
 # Optional: An endpoint to check the status of the loaded model
-@app.get("/status")
+@router.get("/status")
 def get_status():
     """
     Endpoint to get the current status of the loaded model.
@@ -73,16 +76,32 @@ def get_status():
         return {"model": current_model, "status": "loaded"}
     else:
         return {"model": None, "status": "no model loaded"}
+    
+# API endpoint to check LLM availability
+@router.get("/check_llm_presence")
+def api_check_llm_presence():
+    '''
+    Checks whether the LLM models are available locally, and if not - downloads them.
+    '''
+    '''
+    Checks whether the LLM models are available locally.
+    '''
+    # Get the paths to the model files
+    mistral_path = mistral_onboard_llm.load_llm()
+    llama2_path = llama2_onboard_llm.load_llm()
 
-if __name__ == "__main__":
-    import uvicorn
-    from startup_functions import print_banner, check_local_llm_availability, check_local_internet_connection
+    # Check if the model files exist
+    mistral_found = os.path.isfile(mistral_path)
+    llama2_found = os.path.isfile(llama2_path)
 
-    # Run startup checks
-    print_banner()
-    check_local_llm_availability()
-    check_local_internet_connection()
+    # Determine which models are found
+    found_models = []
+    if mistral_found:
+        found_models.append("Mistral")
+    if llama2_found:
+        found_models.append("Llama2")
 
-    # Start the FastAPI server
-    print("Starting AIden's FastAPI server...")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    if found_models:
+        return {"message": "LLMs found.", "found_models": found_models}
+    else:
+        raise HTTPException(status_code=404, detail="LLMs not found.")
