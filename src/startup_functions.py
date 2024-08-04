@@ -11,8 +11,9 @@ import os
 import requests
 import mistral_onboard_llm
 import llama2_onboard_llm
+import copilot_logging
 
-
+logger = copilot_logging.get_logger("aiden.startup")
 
 def print_banner():
     '''
