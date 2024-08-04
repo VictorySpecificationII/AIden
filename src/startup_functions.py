@@ -37,8 +37,8 @@ trace.get_tracer_provider().add_span_processor(
 logger_provider = LoggerProvider(
     resource=Resource.create(
         {
-            "service.name": "shoppingcart",
-            "service.instance.id": "instance-12",
+            "service.name": "startup",
+            "service.instance.id": "instance-00",
         }
     ),
 )
