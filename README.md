@@ -55,7 +55,13 @@ In order to run the testing suite, navigate to the root of the project and run:
 ```bash
 pytest
 ```
+In order to run the linter, pylint, run it from the main project directory otherwise some odd recomendations might come up
 
+```bash
+pylint src/NAME_OF_FILE_TO_LINT
+```
+
+The pylint file, should you wish to modify it is in the project root, named .pylintrc
 # Sources
 
  - https://nanonets.com/blog/langchain/
