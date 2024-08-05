@@ -10,7 +10,7 @@ app.include_router(llm_router, prefix="/llm-text")
 
 if __name__ == "__main__":
     import uvicorn
-    from startup_functions import print_banner
+    from lib_copilot_startup_functions import print_banner
     # Run startup checks
     print_banner()
 
