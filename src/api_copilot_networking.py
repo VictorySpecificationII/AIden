@@ -38,7 +38,6 @@ router = APIRouter()
 # Initialize tracer
 tracer = lib_copilot_telemetry.trace.get_tracer(__name__)
 
-
 # API endpoint to check local internet connection
 @router.get("/check_internet_connectivity", tags=["Networking"])
 def check_internet_connectivity():
