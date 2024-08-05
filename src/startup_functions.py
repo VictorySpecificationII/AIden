@@ -4,61 +4,45 @@ This module contains startup utility functions for an AI Co-Pilot application.
 Functions:
 - print_banner(): Prints a welcome banner at startup.
 """
-
-import logging
-
-from opentelemetry import trace
-from opentelemetry._logs import set_logger_provider
-from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
-from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
-from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
-
-# Initialize TracerProvider and SpanProcessor
-trace.set_tracer_provider(TracerProvider())
-trace.get_tracer_provider().add_span_processor(
-    BatchSpanProcessor(ConsoleSpanExporter())
-)
-
+import lib_copilot_telemetry
 # Initialize LoggerProvider and LoggingHandler
-logger_provider = LoggerProvider(
-    resource=Resource.create(
+logger_provider = lib_copilot_telemetry.LoggerProvider(
+    resource=lib_copilot_telemetry.Resource.create(
         {
             "service.name": "startup",
             "service.instance.id": "instance-00",
         }
     ),
 )
-set_logger_provider(logger_provider)
+lib_copilot_telemetry.set_logger_provider(logger_provider)
 
-exporter = OTLPLogExporter(insecure=True)
-logger_provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
-handler = LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
+exporter = lib_copilot_telemetry.OTLPLogExporter(insecure=True)
+logger_provider.add_log_record_processor(lib_copilot_telemetry.BatchLogRecordProcessor(exporter))
+handler = lib_copilot_telemetry.LoggingHandler(level=lib_copilot_telemetry.logging.NOTSET, logger_provider=logger_provider)
 
 # Set minimum log level and attach OTLP handler to root logger
-logging.basicConfig(level=logging.INFO)
-logging.getLogger().addHandler(handler)
+lib_copilot_telemetry.logging.basicConfig(level=lib_copilot_telemetry.logging.INFO)
+lib_copilot_telemetry.logging.getLogger().addHandler(handler)
 
 # Create different namespaced loggers
-logger1 = logging.getLogger("aiden.startup")
+logger1 = lib_copilot_telemetry.logging.getLogger("aiden.startup")
 
 # Initialize tracer
-tracer = trace.get_tracer(__name__)
+tracer = lib_copilot_telemetry.trace.get_tracer(__name__)
 
 def print_banner():
-    '''
-    Prints a banner at startup.
-    '''
-    ascii_art = """
-        _    ___    _            
-       / \  |_ _|__| | ___ _ __  
-      / _ \  | |/ _` |/ _ \ '_ \ 
-     / ___ \ | | (_| |  __/ | | |
-    /_/   \_\___\__,_|\___|_| |_|
-    
-   Artificial Intelligence Co-Pilot
-    """
-    print(ascii_art)
-    logger1.info("Banner displayed.")
+    with tracer.start_as_current_span("print_welcome_banner"):
+        '''
+        Prints a banner at startup.
+        '''
+        ascii_art = """
+            _    ___    _            
+        / \  |_ _|__| | ___ _ __  
+        / _ \  | |/ _` |/ _ \ '_ \ 
+        / ___ \ | | (_| |  __/ | | |
+        /_/   \_\___\__,_|\___|_| |_|
+        
+    Artificial Intelligence Co-Pilot
+        """
+        print(ascii_art)
+        logger1.info("Banner displayed.")
