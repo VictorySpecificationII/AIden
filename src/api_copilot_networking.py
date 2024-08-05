@@ -4,7 +4,6 @@ This module contains startup utility functions for an AI Co-Pilot application.
 Functions:
 - check_internet_connectivity(): Checks for an active internet connection.
 """
-import logging
 import requests
 from fastapi import APIRouter, HTTPException
 import lib_copilot_telemetry
