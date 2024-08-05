@@ -142,7 +142,18 @@ def switch_model(model_name: str):
     current_model_name = model_name
     return {"status": f"Switched to model {model_name}", "model_path": model_path}
 
-@router.post("/instantiate-llm", tags=["LLM Management | Text Models"])
+@router.get("/get_current_model_in_memory", tags=["LLM Management | Text Models"])
+def get_current_model_in_memory():
+    """
+    Endpoint to get the current status of the loaded model.
+    """
+    current_model = current_model_name
+    if current_model:
+        return {"model": current_model, "status": "loaded"}
+    else:
+        return {"model": None, "status": "no model loaded"}
+
+@router.post("/instantiate-llm", tags=["LLM Communication | Text Models"])
 def instantiate_llm():
     """
     Instantiate the LLM with the path loaded from /load-llm.
@@ -169,7 +180,7 @@ def instantiate_llm():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/create-llm-chain", tags=["LLM Management | Text Models"])
+@router.post("/create-llm-chain", tags=["LLM Communication | Text Models"])
 def create_llm_chain():
     """
     Create an LLMChain using the instantiated LLM.
@@ -192,7 +203,7 @@ def create_llm_chain():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/ask", tags=["LLM Management | Text Models"])
+@router.post("/ask", tags=["LLM Communication | Text Models"])
 async def ask_question(data: Question):
     """
     Handle the POST request to answer a question using the LLM.
@@ -213,13 +224,4 @@ async def ask_question(data: Question):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/get_current_model_in_memory", tags=["LLM Management | Text Models"])
-def get_current_model_in_memory():
-    """
-    Endpoint to get the current status of the loaded model.
-    """
-    current_model = current_model_name
-    if current_model:
-        return {"model": current_model, "status": "loaded"}
-    else:
-        return {"model": None, "status": "no model loaded"}
+
