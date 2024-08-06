@@ -7,12 +7,18 @@ from huggingface_hub import hf_hub_download
 import os
 import json
 
+import lib_copilot_telemetry
+
+
+
 # Global variables to store model paths, LLM instance, and LLM chain
 model_paths = {"mistral": None, "llama2": None}
 llm = None
 llm_chain = None
 current_model_name = None
 model_paths_file = "model_paths.json"
+
+logger, tracer = lib_copilot_telemetry.instrumentator("llm", "instance-00", "llm")
 
 router = APIRouter()
 
@@ -215,13 +221,16 @@ async def ask_question(data: Question):
         dict: The answer from the LLM.
     """
     global llm_chain
-    if llm_chain is None:
-        raise HTTPException(status_code=400, detail="LLMChain not created. Call /create-llm-chain first.")
-    
-    try:
-        answer = llm_chain.run(data.question)
-        return {"answer": answer}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    with tracer.start_as_current_span("ask_llm"):
+        if llm_chain is None:
+            logger.info("LLMChain not created. Call /create-llm-chain first.")
+            raise HTTPException(status_code=400, detail="LLMChain not created. Call /create-llm-chain first.")
+        
+        try:
+            answer = llm_chain.run(data.question)
+            logger.info("Query successful. Returning answer from LLM.")
+            return {"answer": answer}
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
 
 
