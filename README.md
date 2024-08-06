@@ -62,6 +62,18 @@ pylint src/NAME_OF_FILE_TO_LINT
 ```
 
 The pylint file, should you wish to modify it is in the project root, named .pylintrc
+
+# Todo
+
+Some of the things that I want to do, not an exhaustive list.
+
+- [x] Instrument LLM API's
+- [ ] Write better exception handling
+- [ ] Modify LLM API to allow downloading, inventory and loading of any model as opposed to current implementation
+- [ ] Build a frontend (voice and text)
+- [ ] Incorporate chat history
+- [ ] Build LLM agents
+
 # Sources
 
  - https://nanonets.com/blog/langchain/
