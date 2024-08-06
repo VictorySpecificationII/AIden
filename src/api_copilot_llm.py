@@ -154,7 +154,7 @@ def get_current_model_in_memory():
     Endpoint to get the current status of the loaded model.
     """
     current_model = current_model_name
-    with tracer.start_as_current_span("create_llm_chain") as span:
+    with tracer.start_as_current_span("get_current_model_in_memory") as span:
         if current_model:
             logger.info("LLM model returned.")
             tracer.set_span_status(span, success=True)
