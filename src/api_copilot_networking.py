@@ -36,15 +36,15 @@ def check_internet_connectivity():
     Raises:
         HTTPException: If there is no internet connection or if the connection attempt fails.
     """
-    with tracer.start_as_current_span("check_internet_connectivity"):
+    with tracer.start_as_current_span("check_internet_connectivity") as span:
         try:
             is_connected = (lambda: requests.get("https://www.google.com", timeout=5)
                             .status_code == 200)()
             if is_connected:
                 logger.info("Internet connectivity enabled.")
+                tracer.set_span_status(tracer.span, success=True)
                 return {"message": "Internet connectivity enabled."}
-            logger.error("No internet connection.")
-            raise HTTPException(status_code=503, detail="No internet connection.")
-        except requests.ConnectionError:
+        except requests.ConnectionError as e:
             logger.error("Failed to connect to the internet.")
+            tracer.set_span_status(span, success=False, message=str(e))
             raise HTTPException(status_code=503, detail="Failed to connect to the internet.")
