@@ -128,25 +128,31 @@ def switch_model(model_name: str):
     global llm_chain
     global current_model_name
     global model_paths
+    with tracer.start_as_current_span("switch_model") as span:
+        if model_name not in model_paths:
+            logger.info("Invalid model name. Use 'mistral' or 'llama2'.")
+            tracer.set_span_status(span, success=False, message = "Invalid model name. Use 'mistral' or 'llama2'.")
+            raise HTTPException(status_code=400, detail="Invalid model name. Use 'mistral' or 'llama2'.")
 
-    if model_name not in model_paths:
-        raise HTTPException(status_code=400, detail="Invalid model name. Use 'mistral' or 'llama2'.")
+        model_path = model_paths.get(model_name)
+        if model_path is None or not os.path.exists(model_path):
+            logger.info("Model path not found. Call /load-llm first.")
+            tracer.set_span_status(span, success=False, message = "Model not downloaded. Call /download-model first.")
+            raise HTTPException(status_code=400, detail="Model not downloaded. Call /download-model first.")
 
-    model_path = model_paths.get(model_name)
-    if model_path is None or not os.path.exists(model_path):
-        raise HTTPException(status_code=400, detail="Model not downloaded. Call /download-model first.")
+        # Reset the LLM and LLMChain instances
+        llm = LlamaCpp(
+            model_path=model_path,
+            n_gpu_layers=0,
+            n_batch=512,
+            verbose=False,
+        )
+        llm_chain = None  # LLMChain will need to be recreated
 
-    # Reset the LLM and LLMChain instances
-    llm = LlamaCpp(
-        model_path=model_path,
-        n_gpu_layers=0,
-        n_batch=512,
-        verbose=False,
-    )
-    llm_chain = None  # LLMChain will need to be recreated
-
-    current_model_name = model_name
-    return {"status": f"Switched to model {model_name}", "model_path": model_path}
+        current_model_name = model_name
+        logger.info("LLM model switch successful.")
+        tracer.set_span_status(span, success=True)
+        return {"status": f"Switched to model {model_name}", "model_path": model_path}
 
 @router.get("/get_current_model_in_memory", tags=["LLM Management | Text Models"])
 def get_current_model_in_memory():
