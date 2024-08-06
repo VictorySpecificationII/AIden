@@ -83,14 +83,21 @@ def check_downloaded_models(model_name: str):
     Args:
         model_name (str): The name of the model to check. It should be 'mistral' or 'llama2'.
     """
-    if model_name not in model_paths:
-        raise HTTPException(status_code=400, detail="Invalid model name. Use 'mistral' or 'llama2'.")
+    with tracer.start_as_current_span("check_downloaded_models") as span:
+        if model_name not in model_paths:
+            logger.info("Invalid model name. Use 'mistral' or 'llama2'.")
+            tracer.set_span_status(span, success=False, message = "Invalid model name. Use 'mistral' or 'llama2'.")
+            raise HTTPException(status_code=400, detail="Invalid model name. Use 'mistral' or 'llama2'.")
 
-    model_path = model_paths.get(model_name)
-    if model_path and os.path.exists(model_path):
-        return {"model_path": model_path, "status": "model downloaded"}
-    else:
-        return {"status": "model not downloaded"}
+        model_path = model_paths.get(model_name)
+        if model_path and os.path.exists(model_path):
+            logger.info("LLM model downloaded.")
+            tracer.set_span_status(span, success=True)
+            return {"model_path": model_path, "status": "model downloaded"}
+        else:
+            logger.info("LLM model not downloaded.")
+            tracer.set_span_status(span, success=True)
+            return {"status": "model not downloaded"}
 
 @router.get("/load-llm", tags=["LLM Management | Text Models"])
 def load_llm(model_name: str):
