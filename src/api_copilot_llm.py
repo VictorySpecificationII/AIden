@@ -192,22 +192,28 @@ def create_llm_chain():
     Create an LLMChain using the instantiated LLM.
     """
     global llm_chain
-    if llm is None:
-        raise HTTPException(status_code=400, detail="LLM not instantiated. Call /instantiate-llm first.")
-    
-    try:
-        template = """
-        You are AIden, a co-pilot and digital companion. You are witty, gentlemanly, and inquisitive with an engineering-oriented mindset. Please reflect these qualities in your response.
+    with tracer.start_as_current_span("ask_llm") as span:
+        if llm is None:
+            logger.info("LLMChain created.")
+            tracer.set_span_status(span, success=False, message = "No LLMChain")
+            raise HTTPException(status_code=400, detail="LLM not instantiated. Call /instantiate-llm first.")
+        
+        try:
+            template = """
+            You are AIden, a co-pilot and digital companion. You are witty, gentlemanly, and inquisitive with an engineering-oriented mindset. Please reflect these qualities in your response.
 
-        Question: {question}
+            Question: {question}
 
-        Answer:
-        """
-        prompt = PromptTemplate(template=template, input_variables=["question"])
-        llm_chain = LLMChain(prompt=prompt, llm=llm)
-        return {"status": "LLMChain created"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+            Answer:
+            """
+            prompt = PromptTemplate(template=template, input_variables=["question"])
+            llm_chain = LLMChain(prompt=prompt, llm=llm)
+            logger.info("LLMChain LLMChain created.")
+            tracer.set_span_status(span, success=True)
+            return {"status": "LLMChain created"}
+        except Exception as e:
+            tracer.set_span_status(span, success=False, message=str(e))
+            raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/ask", tags=["LLM Communication | Text Models"])
 async def ask_question(data: Question):
