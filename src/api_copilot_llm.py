@@ -57,23 +57,27 @@ def download_models():
     global model_paths
     global current_model_name
 
-    try:
-        # Download Mistral model
-        mistral_model_name = "TheBloke/Mistral-7B-OpenOrca-GGUF"
-        mistral_model_file = "mistral-7b-openorca.Q4_K_M.gguf"
-        model_paths["mistral"] = hf_hub_download(mistral_model_name, filename=mistral_model_file)
+    with tracer.start_as_current_span("download_models") as span:
+        try:
+            # Download Mistral model
+            mistral_model_name = "TheBloke/Mistral-7B-OpenOrca-GGUF"
+            mistral_model_file = "mistral-7b-openorca.Q4_K_M.gguf"
+            model_paths["mistral"] = hf_hub_download(mistral_model_name, filename=mistral_model_file)
 
-        # Download Llama-2 model
-        llama2_model_name = "TheBloke/Llama-2-7B-Chat-GGUF"
-        llama2_model_file = "llama-2-7b-chat.Q4_0.gguf"
-        model_paths["llama2"] = hf_hub_download(llama2_model_name, filename=llama2_model_file)
+            # Download Llama-2 model
+            llama2_model_name = "TheBloke/Llama-2-7B-Chat-GGUF"
+            llama2_model_file = "llama-2-7b-chat.Q4_0.gguf"
+            model_paths["llama2"] = hf_hub_download(llama2_model_name, filename=llama2_model_file)
 
-        # Save model paths to file
-        save_model_paths()
+            # Save model paths to file
+            save_model_paths()
 
-        return {"model_paths": model_paths}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+            logger.info("LLM models downloaded.")
+            tracer.set_span_status(span, success=True)
+            return {"model_paths": model_paths}
+        except Exception as e:
+            tracer.set_span_status(span, success=False, message=str(e))
+            raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/check-downloaded-models", tags=["LLM Management | Text Models"])
 def check_downloaded_models(model_name: str):
@@ -91,11 +95,11 @@ def check_downloaded_models(model_name: str):
 
         model_path = model_paths.get(model_name)
         if model_path and os.path.exists(model_path):
-            logger.info("LLM model downloaded.")
+            logger.info("LLM model exists locally.")
             tracer.set_span_status(span, success=True)
             return {"model_path": model_path, "status": "model downloaded"}
         else:
-            logger.info("LLM model not downloaded.")
+            logger.info("LLM model does not exist locally.")
             tracer.set_span_status(span, success=True)
             return {"status": "model not downloaded"}
 
