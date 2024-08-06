@@ -102,19 +102,26 @@ def load_llm(model_name: str):
     """
     global model_paths
     global current_model_name
+    with tracer.start_as_current_span("load_llm") as span:
+        if model_name not in model_paths:
+            logger.info("Invalid model name. Use 'mistral' or 'llama2'.")
+            tracer.set_span_status(span, success=False, message = "Invalid model name. Use 'mistral' or 'llama2'.")
+            raise HTTPException(status_code=400, detail="Invalid model name. Use 'mistral' or 'llama2'.")
 
-    if model_name not in model_paths:
-        raise HTTPException(status_code=400, detail="Invalid model name. Use 'mistral' or 'llama2'.")
+        model_path = model_paths.get(model_name)
+        if model_path is None:
+            logger.info("Model not downloaded. Call /download-model first.")
+            tracer.set_span_status(span, success=False, message = "Model not downloaded. Call /download-model first.")
+            raise HTTPException(status_code=400, detail="Model not downloaded. Call /download-model first.")
 
-    model_path = model_paths.get(model_name)
-    if model_path is None:
-        raise HTTPException(status_code=400, detail="Model not downloaded. Call /download-model first.")
-
-    try:
-        current_model_name = model_name
-        return {"model_path": model_path}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        try:
+            current_model_name = model_name
+            logger.info("LLM model load successful.")
+            tracer.set_span_status(span, success=True)
+            return {"model_path": model_path}
+        except Exception as e:
+            tracer.set_span_status(span, success=False, message=str(e))
+            raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/switch-model", tags=["LLM Management | Text Models"])
 def switch_model(model_name: str):
