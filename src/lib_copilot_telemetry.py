@@ -8,6 +8,7 @@ from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
+from opentelemetry.trace.status import Status, StatusCode
 
 def instrumentator(svc_name, instance_id, logging_area):
     """
@@ -62,5 +63,22 @@ def instrumentator(svc_name, instance_id, logging_area):
 
     # Initialize tracer
     tracer = trace.get_tracer(__name__)
+
+    def set_span_status(span, success: bool, message: str = ""):
+        """
+        Sets the status of a span based on success or failure.
+
+        Parameters:
+        - span (trace.Span): The span to set the status for.
+        - success (bool): Whether the operation was successful.
+        - message (str, optional): Additional information about the status.
+        """
+        if success:
+            span.set_status(Status(StatusCode.OK, message))
+        else:
+            span.set_status(Status(StatusCode.ERROR, message))
+
+    # Attach the helper method to the tracer object for easy access
+    tracer.set_span_status = set_span_status
 
     return logger, tracer

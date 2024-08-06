@@ -224,6 +224,7 @@ async def ask_question(data: Question):
     with tracer.start_as_current_span("ask_llm"):
         if llm_chain is None:
             logger.info("LLMChain not created. Call /create-llm-chain first.")
+            tracer.set_span_status(tracer.span, success=True)
             raise HTTPException(status_code=400, detail="LLMChain not created. Call /create-llm-chain first.")
         
         try:
@@ -231,6 +232,7 @@ async def ask_question(data: Question):
             logger.info("Query successful. Returning answer from LLM.")
             return {"answer": answer}
         except Exception as e:
+            tracer.set_span_status(tracer.span, success=False, message=str(e))
             raise HTTPException(status_code=500, detail=str(e))
 
 
