@@ -192,7 +192,7 @@ def create_llm_chain():
     Create an LLMChain using the instantiated LLM.
     """
     global llm_chain
-    with tracer.start_as_current_span("ask_llm") as span:
+    with tracer.start_as_current_span("create_llm_chain") as span:
         if llm is None:
             logger.info("LLMChain created.")
             tracer.set_span_status(span, success=False, message = "No LLMChain")
