@@ -154,10 +154,15 @@ def get_current_model_in_memory():
     Endpoint to get the current status of the loaded model.
     """
     current_model = current_model_name
-    if current_model:
-        return {"model": current_model, "status": "loaded"}
-    else:
-        return {"model": None, "status": "no model loaded"}
+    with tracer.start_as_current_span("create_llm_chain") as span:
+        if current_model:
+            logger.info("LLM model returned.")
+            tracer.set_span_status(span, success=True)
+            return {"model": current_model, "status": "loaded"}
+        else:
+            logger.info("No LLM model to return.")
+            tracer.set_span_status(span, success=True)
+            return {"model": None, "status": "no model loaded"}
 
 @router.post("/instantiate-llm", tags=["LLM Communication | Text Models"])
 def instantiate_llm():
@@ -168,7 +173,7 @@ def instantiate_llm():
     global model_paths
     global current_model_name
 
-    with tracer.start_as_current_span("create_llm_chain") as span:
+    with tracer.start_as_current_span("instantiate_llm_chain") as span:
         if current_model_name is None:
             logger.info("No model loaded. Call /load-llm first.")
             tracer.set_span_status(span, success=False, message = "No model loaded. Call /load-llm first.")
@@ -202,8 +207,8 @@ def create_llm_chain():
     global llm_chain
     with tracer.start_as_current_span("create_llm_chain") as span:
         if llm is None:
-            logger.info("LLMChain created.")
-            tracer.set_span_status(span, success=False, message = "No LLMChain")
+            logger.info("LLM not instantiated. Call /instantiate-llm first.")
+            tracer.set_span_status(span, success=False, message = "LLM not instantiated. Call /instantiate-llm first.")
             raise HTTPException(status_code=400, detail="LLM not instantiated. Call /instantiate-llm first.")
         
         try:
@@ -238,7 +243,7 @@ async def ask_question(data: Question):
     with tracer.start_as_current_span("ask_llm") as span:
         if llm_chain is None:
             logger.info("LLMChain not created. Call /create-llm-chain first.")
-            tracer.set_span_status(span, success=False, message = "No LLMChain")
+            tracer.set_span_status(span, success=False, message = "LLMChain not created. Call /create-llm-chain first.")
             raise HTTPException(status_code=400, detail="LLMChain not created. Call /create-llm-chain first.")
         
         try:
