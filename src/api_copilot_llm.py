@@ -168,23 +168,31 @@ def instantiate_llm():
     global model_paths
     global current_model_name
 
-    if current_model_name is None:
-        raise HTTPException(status_code=400, detail="No model loaded. Call /load-llm first.")
+    with tracer.start_as_current_span("create_llm_chain") as span:
+        if current_model_name is None:
+            logger.info("No model loaded. Call /load-llm first.")
+            tracer.set_span_status(span, success=False, message = "No model loaded. Call /load-llm first.")
+            raise HTTPException(status_code=400, detail="No model loaded. Call /load-llm first.")
 
-    model_path = model_paths.get(current_model_name)
-    if model_path is None:
-        raise HTTPException(status_code=400, detail="Model path not found. Call /load-llm first.")
-    
-    try:
-        llm = LlamaCpp(
-            model_path=model_path,
-            n_gpu_layers=0,
-            n_batch=512,
-            verbose=False,
-        )
-        return {"status": "LLM instantiated"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        model_path = model_paths.get(current_model_name)
+        if model_path is None:
+            logger.info("Model path not found. Call /load-llm first.")
+            tracer.set_span_status(span, success=False, message = "Model path not found. Call /load-llm first.")
+            raise HTTPException(status_code=400, detail="Model path not found. Call /load-llm first.")
+        
+        try:
+            llm = LlamaCpp(
+                model_path=model_path,
+                n_gpu_layers=0,
+                n_batch=512,
+                verbose=False,
+            )
+            logger.info("LLM instantiated.")
+            tracer.set_span_status(span, success=True)
+            return {"status": "LLM instantiated"}
+        except Exception as e:
+            tracer.set_span_status(span, success=False, message=str(e))
+            raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/create-llm-chain", tags=["LLM Communication | Text Models"])
 def create_llm_chain():
