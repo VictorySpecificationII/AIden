@@ -156,7 +156,7 @@ def switch_model(model_name: str):
         if model_path is None or not os.path.exists(model_path):
             logger.info("Model path not found. Call /load-llm first.")
             tracer.set_span_status(span, success=False, message = "Model not downloaded. Call /download-model first.")
-            raise HTTPException(status_code=400, detail="Model not downloaded. Call /download-model first.")
+            raise HTTPException(status_code=404, detail="Model not downloaded. Call /download-model first.")
 
         # Reset the LLM and LLMChain instances
         llm = LlamaCpp(
