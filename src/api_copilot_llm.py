@@ -147,16 +147,17 @@ def switch_model(model_name: str):
     global current_model_name
     global model_paths
     with tracer.start_as_current_span("switch_model") as span:
-        if model_name not in model_paths:
-            logger.info("Invalid model name. Use 'mistral' or 'llama2'.")
-            tracer.set_span_status(span, success=False, message = "Invalid model name. Use 'mistral' or 'llama2'.")
-            raise HTTPException(status_code=400, detail="Invalid model name. Use 'mistral' or 'llama2'.")
 
         model_path = model_paths.get(model_name)
         if model_path is None or not os.path.exists(model_path):
             logger.info("Model path not found. Call /load-llm first.")
             tracer.set_span_status(span, success=False, message = "Model not downloaded. Call /download-model first.")
             raise HTTPException(status_code=404, detail="Model not downloaded. Call /download-model first.")
+
+        if model_name not in model_paths:
+            logger.info("Invalid model name. Use 'mistral' or 'llama2'.")
+            tracer.set_span_status(span, success=False, message = "Invalid model name. Use 'mistral' or 'llama2'.")
+            raise HTTPException(status_code=400, detail="Invalid model name. Use 'mistral' or 'llama2'.")
 
         # Reset the LLM and LLMChain instances
         llm = LlamaCpp(
