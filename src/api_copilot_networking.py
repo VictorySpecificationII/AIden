@@ -42,7 +42,7 @@ def check_internet_connectivity():
                             .status_code == 200)()
             if is_connected:
                 logger.info("Internet connectivity enabled.")
-                tracer.set_span_status(tracer.span, success=True)
+                tracer.set_span_status(span, success=True)
                 return {"message": "Internet connectivity enabled."}
         except requests.ConnectionError as e:
             logger.error("Failed to connect to the internet.")
