@@ -123,7 +123,7 @@ def load_llm(model_name: str):
         if model_path is None:
             logger.info("Model not downloaded. Call /download-model first.")
             tracer.set_span_status(span, success=False, message = "Model not downloaded. Call /download-model first.")
-            raise HTTPException(status_code=400, detail="Model not downloaded. Call /download-model first.")
+            raise HTTPException(status_code=404, detail="Model not downloaded. Call /download-model first.")
 
         try:
             current_model_name = model_name
