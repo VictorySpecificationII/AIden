@@ -101,7 +101,7 @@ def check_downloaded_models(model_name: str):
         else:
             logger.info("LLM model does not exist locally.")
             tracer.set_span_status(span, success=True)
-            return {"status": "model not downloaded"}
+            raise HTTPException(status_code=404, detail="Model not downloaded.")
 
 @router.get("/load-llm", tags=["LLM Management | Text Models"])
 def load_llm(model_name: str):
