@@ -7,6 +7,7 @@ import os
 import json
 import threading
 import logging
+import lib_copilot_telemetry
 
 class LLMService:
     def __init__(self, logger, tracer):
@@ -47,11 +48,11 @@ class LLMService:
                 self.save_model_paths()
 
                 self.logger.info("LLM models downloaded.")
-                span.set_status(True)
+                self.tracer.set_span_status(span, success=True)
                 return {"model_paths": self.model_paths}
             except Exception as e:
                 self.logger.error(f"Error downloading models: {str(e)}")
-                span.set_status(False, str(e))
+                self.tracer.set_span_status(span, success=False, message=str(e))
                 raise HTTPException(status_code=500, detail=str(e))
 
     def load_llm(self, model_name: str):
@@ -66,11 +67,11 @@ class LLMService:
 
                 self.current_model_name = model_name
                 self.logger.info(f"Model {model_name} loaded successfully with path {model_path}.")
-                span.set_status(True)
+                self.tracer.set_span_status(span, success=True)
                 return model_path
             except Exception as e:
                 self.logger.error(f"Error loading model {model_name}: {str(e)}")
-                span.set_status(False, str(e))
+                self.tracer.set_span_status(span, success=False, message=str(e))
                 raise HTTPException(status_code=500, detail=str(e))
 
     def switch_model(self, model_name: str):
@@ -89,11 +90,11 @@ class LLMService:
                 self.llm_chain = None
                 self.current_model_name = model_name
                 self.logger.info(f"Switched to model {model_name}.")
-                span.set_status(True)
+                self.tracer.set_span_status(span, success=True)
                 return {"status": f"Switched to model {model_name}", "model_path": model_path}
             except Exception as e:
                 self.logger.error(f"Error switching to model {model_name}: {str(e)}")
-                span.set_status(False, str(e))
+                self.tracer.set_span_status(span, success=False, message=str(e))
                 raise HTTPException(status_code=500, detail=str(e))
 
     def instantiate_llm(self):
@@ -113,11 +114,11 @@ class LLMService:
                     verbose=False,
                 )
                 self.logger.info("LLM instantiated.")
-                span.set_status(True)
+                self.tracer.set_span_status(span, success=True)
                 return {"status": "LLM instantiated"}
             except Exception as e:
                 self.logger.error(f"Error instantiating LLM: {str(e)}")
-                span.set_status(False, str(e))
+                self.tracer.set_span_status(span, success=False, message=str(e))
                 raise HTTPException(status_code=500, detail=str(e))
 
     def create_llm_chain(self):
@@ -136,11 +137,11 @@ class LLMService:
                 prompt = PromptTemplate(template=template, input_variables=["question"])
                 self.llm_chain = LLMChain(prompt=prompt, llm=self.llm)
                 self.logger.info("LLMChain created.")
-                span.set_status(True)
+                self.tracer.set_span_status(span, success=True)
                 return {"status": "LLMChain created"}
             except Exception as e:
                 self.logger.error(f"Error creating LLMChain: {str(e)}")
-                span.set_status(False, str(e))
+                self.tracer.set_span_status(span, success=False, message=str(e))
                 raise HTTPException(status_code=500, detail=str(e))
 
     def ask_question(self, question: str):
@@ -151,11 +152,11 @@ class LLMService:
                 
                 answer = self.llm_chain.run(question)
                 self.logger.info("Query successful. Returning answer from LLM.")
-                span.set_status(True)
+                self.tracer.set_span_status(span, success=True)
                 return answer
             except Exception as e:
                 self.logger.error(f"Error during LLM query: {str(e)}")
-                span.set_status(False, str(e))
+                self.tracer.set_span_status(span, success=False, message=str(e))
                 raise HTTPException(status_code=500, detail=str(e))
 
     def get_current_model_in_memory(self):
@@ -163,11 +164,11 @@ class LLMService:
             try:
                 if self.current_model_name:
                     self.logger.info(f"Current model in memory: {self.current_model_name}")
-                    span.set_status(True)
+                    self.tracer.set_span_status(span, success=True)
                     return {"model": self.current_model_name, "status": "loaded"}
                 else:
                     raise HTTPException(status_code=400, detail="No LLM model currently in memory. Call /load-llm first.")
             except Exception as e:
                 self.logger.error(f"Error getting current model in memory: {str(e)}")
-                span.set_status(False, str(e))
+                self.tracer.set_span_status(span, success=False, message=str(e))
                 raise HTTPException(status_code=500, detail=str(e))
