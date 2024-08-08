@@ -208,7 +208,7 @@ def instantiate_llm():
         if model_path is None:
             logger.info("Model path not found. Call /load-llm first.")
             tracer.set_span_status(span, success=False, message = "Model path not found. Call /load-llm first.")
-            raise HTTPException(status_code=400, detail="Model path not found. Call /load-llm first.")
+            raise HTTPException(status_code=404, detail="Model path not found. Call /load-llm first.")
         
         try:
             llm = LlamaCpp(
