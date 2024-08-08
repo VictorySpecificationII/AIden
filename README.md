@@ -69,7 +69,7 @@ Some of the things that I want to do, not an exhaustive list.
 
 - [x] Instrument LLM API's
 - [x] Write better exception handling
-- [ ] Encapsulate LLM library in class, call functions in libraries via dependency injection in API's for better segmentation
+- [x] Encapsulate LLM library in class, call functions in libraries via dependency injection in API's for better segmentation
 - [ ] Modify LLM API to allow downloading, inventory and loading of any model as opposed to current implementation
 - [ ] Build a frontend (voice and text)
 - [ ] Incorporate chat history
