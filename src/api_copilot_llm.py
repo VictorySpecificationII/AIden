@@ -186,8 +186,8 @@ def get_current_model_in_memory():
             return {"model": current_model, "status": "loaded"}
         else:
             logger.info("No LLM model to return.")
-            tracer.set_span_status(span, success=True)
-            return {"model": None, "status": "no model loaded"}
+            tracer.set_span_status(span, success=False, message = "No LLM model currently in memory.Call /load-llm first.")
+            raise HTTPException(status_code=400, detail="No LLM model currently in memory.Call /load-llm first.")
 
 @router.post("/instantiate-llm", tags=["LLM Communication | Text Models"])
 def instantiate_llm():
