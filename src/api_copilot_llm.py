@@ -19,8 +19,14 @@ class Question(BaseModel):
 
 @router.get("/download-models", tags=["LLM Management | Text Models"])
 def download_models(svc_copilot_llm: LLMService = Depends(get_svc_copilot_llm)):
-    return svc_copilot_llm.download_models()
-
+    with tracer.start_as_current_span("api_download_models") as span:
+        try:
+            return svc_copilot_llm.download_models()
+        except Exception as e:
+            logger.error(f"Error in /download-models API call: {str(e)}")
+            tracer.set_span_status(span, success=False, message=str(e))
+            raise HTTPException(status_code=500, detail=str(e))
+        
 @router.get("/load-llm", tags=["LLM Management | Text Models"])
 def load_llm(model_name: str, svc_copilot_llm: LLMService = Depends(get_svc_copilot_llm)):
     return svc_copilot_llm.load_llm(model_name)
