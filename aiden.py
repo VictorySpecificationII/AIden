@@ -1,12 +1,23 @@
-from fastapi import FastAPI
-import logging
+from fastapi import FastAPI, Request
+from contextlib import asynccontextmanager
 
-api = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup code
+    print("Starting up...")
+    yield
+    # Shutdown code
+    print("Shutting down...")
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+api = FastAPI(lifespan=lifespan)
+
+@api.middleware("http")
+async def custom_middleware(request: Request, call_next):
+    # This is a stub for a middleware function.
+    # Example: You can process the request, add headers, etc.
+    response = await call_next(request)
+    return response
 
 @api.get("/")
 async def root():
-    logger.info("root point accessed")
     return {"message": "Welcome to AIden's API server."}
