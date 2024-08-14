@@ -4,6 +4,8 @@ services:
     image: otel/opentelemetry-collector:latest
     container_name: otel-collector
     command: ["--config=/etc/otel-collector-config.yaml"]
+    networks:
+      - aiden-dev
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
     ports:
@@ -11,4 +13,8 @@ services:
       - "4318:4318"     # OTLP HTTP receiver
       - "8888:8888"     # Prometheus metrics exporter
       - "14268:14268"   # Jaeger Thrift receiver for traces
-      - "9200:9200"     # Elasticsearch (assuming it's on the same network)
+      - "9200:9200"     # Elasticsearch
+
+networks:
+  aiden-dev:
+    name: aiden-dev
