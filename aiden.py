@@ -21,6 +21,8 @@ from opentelemetry import metrics
 
 import psutil
 import time
+import random
+from starlette.exceptions import HTTPException
 
 def configure_opentelemetry():
     # Set up the TracerProvider
@@ -82,7 +84,14 @@ def configure_metrics():
         unit="1"
     )
 
-    return meter, latency_histogram, request_counter
+    # Define error metric
+    error_counter = meter.create_counter(
+        name="service_errors",
+        description="Counter for the number of errors encountered",
+        unit="1"
+    )
+
+    return meter, latency_histogram, request_counter, error_counter
 
 api = FastAPI()
 
@@ -99,20 +108,55 @@ async def tracing_middleware(request: Request, call_next):
         logger.info("Completed request: %s", request.url)
         return response
 
-# Middleware for metrics
+# # Middleware for metrics
+# @api.middleware("http")
+# async def metrics_middleware(request: Request, call_next):
+#     logger = logging.getLogger(__name__)
+#     start_time = time.time()
+#     try:
+#         response = await call_next(request)
+#     except HTTPException as e:
+#         # Increment the error counter on any exception
+#         error_counter.add(1)
+#         logger.info("request failed %s", e)
+#         raise e
+#     finally:
+#         end_time = time.time()
+        
+#         # Record latency
+#         latency = end_time - start_time
+#         latency_histogram.record(latency)
+        
+#         # Record traffic
+#         request_counter.add(1)
+
+#     return response
+
 @api.middleware("http")
 async def metrics_middleware(request: Request, call_next):
-    #Record latency
+    logger = logging.getLogger(__name__)
     start_time = time.time()
-    response = await call_next(request)
-    end_time = time.time()
-    latency = end_time - start_time
-    latency_histogram.record(latency)
+    try:
+        response = await call_next(request)
+    finally:
+        end_time = time.time()
+        
+        # Record latency
+        latency = end_time - start_time
+        latency_histogram.record(latency)
+        
+        # Record traffic
+        request_counter.add(1)
 
-    # Record traffic
-    request_counter.add(1)
+        # Check the response status code
+        if response.status_code >= 400:
+            # Increment the error counter if the status code is 4xx or 5xx
+            error_counter.add(1)
+            # Log the error
+            logger.error("Request to %s resulted in error %s", request.url, response.status_code)
 
     return response
+
 
 @api.get("/")
 async def root():
@@ -129,6 +173,17 @@ async def read_item(item_id: int):
         logging.debug(f"Item ID: {item_id} requested")
         return {"item_id": item_id}
 
+@api.get("/latency")
+async def simulate_latency():
+    # Simulate variable latency
+    delay = random.uniform(0.1, 2.0)  # Random delay between 0.1 and 2.0 seconds
+    time.sleep(delay)
+    return {"message": f"Simulated latency of {delay:.2f} seconds"}
+
+@api.get("/error")
+async def trigger_error():
+    raise HTTPException(status_code=500, detail="This is a test error")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logging.debug("Starting up...")
@@ -138,6 +193,6 @@ async def lifespan(app: FastAPI):
 api.lifespan = lifespan
 
 configure_opentelemetry()
-meter, latency_histogram, request_counter = configure_metrics()
+meter, latency_histogram, request_counter, error_counter = configure_metrics()
 
 api.add_middleware(OpenTelemetryMiddleware)
