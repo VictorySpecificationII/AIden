@@ -11,9 +11,21 @@ services:
     ports:
       - "4317:4317"     # OTLP gRPC receiver
       - "4318:4318"     # OTLP HTTP receiver
-      - "8888:8888"     # Prometheus metrics exporter
+      - "8889:8889"     # Prometheus metrics exporter
       - "14268:14268"   # Jaeger Thrift receiver for traces
       - "9200:9200"     # Elasticsearch
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"     # Prometheus web interface
+    networks:
+      - aiden-dev
+    depends_on:
+      - otel-collector
 
 networks:
   aiden-dev:

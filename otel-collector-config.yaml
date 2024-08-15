@@ -1,4 +1,3 @@
-# otel-collector-config.yaml
 receivers:
   otlp:
     protocols:
@@ -8,6 +7,9 @@ receivers:
 exporters:
   logging:
     loglevel: debug
+
+  prometheus:
+    endpoint: "0.0.0.0:8889"
 
 processors:
   batch:
@@ -24,4 +26,5 @@ service:
             exporters: [logging]
         metrics:
             receivers: [otlp]
-            exporters: [logging]
+            processors: [batch]
+            exporters: [logging, prometheus]
