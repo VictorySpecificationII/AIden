@@ -59,7 +59,7 @@ def configure_opentelemetry():
 def configure_metrics():
     # # Initialize the OTLP metric exporter
     exporter = OTLPMetricExporter(endpoint="http://localhost:4317")  # Adjust endpoint as needed
-    metric_reader = PeriodicExportingMetricReader(exporter, export_interval_millis=5000)
+    metric_reader = PeriodicExportingMetricReader(exporter, export_interval_millis=20000)
     provider = MeterProvider(metric_readers=[metric_reader], resource=Resource.create(
         {"service.name": "fastapi-service"}
     ))
@@ -75,7 +75,14 @@ def configure_metrics():
         unit="s"
     )
 
-    return meter, latency_histogram
+    # Define traffic metric
+    request_counter = meter.create_counter(
+        name="service_requests",
+        description="Counter for the number of requests handled",
+        unit="1"
+    )
+
+    return meter, latency_histogram, request_counter
 
 api = FastAPI()
 
@@ -95,11 +102,16 @@ async def tracing_middleware(request: Request, call_next):
 # Middleware for metrics
 @api.middleware("http")
 async def metrics_middleware(request: Request, call_next):
+    #Record latency
     start_time = time.time()
     response = await call_next(request)
     end_time = time.time()
     latency = end_time - start_time
     latency_histogram.record(latency)
+
+    # Record traffic
+    request_counter.add(1)
+
     return response
 
 @api.get("/")
@@ -126,6 +138,6 @@ async def lifespan(app: FastAPI):
 api.lifespan = lifespan
 
 configure_opentelemetry()
-meter, latency_histogram = configure_metrics()
+meter, latency_histogram, request_counter = configure_metrics()
 
 api.add_middleware(OpenTelemetryMiddleware)
