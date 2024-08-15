@@ -83,7 +83,7 @@ api = FastAPI()
 FastAPIInstrumentor.instrument_app(api)
 
 @api.middleware("http")
-async def custom_middleware(request: Request, call_next):
+async def tracing_middleware(request: Request, call_next):
     tracer = trace.get_tracer(__name__)
     with tracer.start_as_current_span("http_request"):
         logger = logging.getLogger(__name__)
