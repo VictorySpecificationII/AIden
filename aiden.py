@@ -92,7 +92,7 @@ async def custom_middleware(request: Request, call_next):
         logger.info("Completed request: %s", request.url)
         return response
 
-# Middleware to measure latency
+# Middleware for metrics
 @api.middleware("http")
 async def metrics_middleware(request: Request, call_next):
     start_time = time.time()
