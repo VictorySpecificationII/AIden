@@ -24,6 +24,7 @@ import psutil
 import time
 import random
 from starlette.exceptions import HTTPException
+import asyncio
 
 def configure_opentelemetry():
     # Set up the TracerProvider
@@ -181,7 +182,7 @@ async def read_item(item_id: int):
 async def simulate_latency():
     # Simulate variable latency
     delay = random.uniform(0.1, 2.0)  # Random delay between 0.1 and 2.0 seconds
-    time.sleep(delay)
+    await asyncio.sleep(delay)# to avoid blocking the event loop
     return {"message": f"Simulated latency of {delay:.2f} seconds"}
 
 @api.get("/error")
