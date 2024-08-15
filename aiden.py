@@ -12,7 +12,15 @@ from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.sdk.resources import Resource
+
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter # use for metrics
+from opentelemetry.metrics import Counter, Histogram, ObservableGauge
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry import metrics
+
+import psutil
+import time
 
 def configure_opentelemetry():
     # Set up the TracerProvider
@@ -46,6 +54,21 @@ def configure_opentelemetry():
     handler = LoggingHandler(level=logging.DEBUG, logger_provider=logger_provider)  # Set level to DEBUG
     logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.DEBUG)  # Set root logger level to DEBUG
+
+
+def configure_metrics():
+    # # Initialize the OTLP metric exporter
+    exporter = OTLPMetricExporter(endpoint="http://localhost:4317")  # Adjust endpoint as needed
+    metric_reader = PeriodicExportingMetricReader(exporter)
+    provider = MeterProvider(metric_readers=[metric_reader], resource=Resource.create(
+        {"service.name": "fastapi-service"}
+    ))
+
+    metrics.set_meter_provider(provider)
+    # Creates a meter from the global meter provider
+    meter = metrics.get_meter(__name__)
+
+    return meter
 
 api = FastAPI()
 
@@ -86,5 +109,6 @@ async def lifespan(app: FastAPI):
 api.lifespan = lifespan
 
 configure_opentelemetry()
+meter = configure_metrics()
 
 api.add_middleware(OpenTelemetryMiddleware)

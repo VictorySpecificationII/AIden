@@ -37,6 +37,7 @@ opentelemetry-semantic-conventions==0.47b0
 opentelemetry-test-utils==0.47b0
 opentelemetry-util-http==0.47b0
 protobuf==4.25.4
+psutil==6.0.0
 pydantic==2.8.2
 pydantic_core==2.20.1
 requests==2.32.3
