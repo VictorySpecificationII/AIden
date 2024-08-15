@@ -18,6 +18,7 @@ from opentelemetry.metrics import Counter, Histogram, ObservableGauge
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry import metrics
+from opentelemetry.metrics import Observation, CallbackOptions
 
 import psutil
 import time
@@ -89,6 +90,33 @@ def configure_metrics():
         name="service_errors",
         description="Counter for the number of errors encountered",
         unit="1"
+    )
+
+    # Callback to gather cpu usage
+    def get_cpu_usage_callback(_: CallbackOptions):
+        for (number, percent) in enumerate(psutil.cpu_percent(percpu=True)):
+            attributes = {"cpu_number": str(number)}
+            yield Observation(percent, attributes)
+
+
+    # Callback to gather RAM memory usage
+    def get_ram_usage_callback(_: CallbackOptions):
+        ram_percent = psutil.virtual_memory().percent
+        yield Observation(ram_percent)
+
+
+    cpu_gauge = meter.create_observable_gauge(
+        callbacks=[get_cpu_usage_callback],
+        name="cpu_percent",
+        description="per-cpu usage",
+        unit="1"
+    )
+
+    ram_gauge = meter.create_observable_gauge(
+        callbacks=[get_ram_usage_callback],
+        name="ram_percent",
+        description="RAM memory usage",
+        unit="1",
     )
 
     return meter, latency_histogram, request_counter, error_counter
