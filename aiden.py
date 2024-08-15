@@ -108,30 +108,6 @@ async def tracing_middleware(request: Request, call_next):
         logger.info("Completed request: %s", request.url)
         return response
 
-# # Middleware for metrics
-# @api.middleware("http")
-# async def metrics_middleware(request: Request, call_next):
-#     logger = logging.getLogger(__name__)
-#     start_time = time.time()
-#     try:
-#         response = await call_next(request)
-#     except HTTPException as e:
-#         # Increment the error counter on any exception
-#         error_counter.add(1)
-#         logger.info("request failed %s", e)
-#         raise e
-#     finally:
-#         end_time = time.time()
-        
-#         # Record latency
-#         latency = end_time - start_time
-#         latency_histogram.record(latency)
-        
-#         # Record traffic
-#         request_counter.add(1)
-
-#     return response
-
 @api.middleware("http")
 async def metrics_middleware(request: Request, call_next):
     logger = logging.getLogger(__name__)
