@@ -1,30 +1,42 @@
+# Receivers: These define where the OpenTelemetry Collector listens for incoming data.
 receivers:
   otlp:
     protocols:
       grpc:
-        endpoint: 0.0.0.0:4317
+        endpoint: 0.0.0.0:4317 # collector listens for incoming data over gRPC on this port
+      # http:
+      #   endpoint: 0.0.0.0:4318 # collector listens for incoming data over HTTP on this port
 
+# Exporters: These define where the collected data will be sent.
 exporters:
   logging:
-    loglevel: debug
+    loglevel: debug # The logging exporter outputs data to the console with a log level of debug.
 
   prometheus:
-    endpoint: "0.0.0.0:8889"
+    endpoint: "0.0.0.0:8889" # collector exposes metrics on this port, localhost:8889/metrics to see
 
+# Processors: These are used to process data between receiving and exporting. 
 processors:
   batch:
 
+# Service Pipelines: These define how data flows from receivers through processors to exporters.
 service:
     pipelines:
         logs:
+            # For logs, data received on 0.0.0.0:4317 (via the otlp receiver) is 
+            # processed and then exported to the logging exporter.
             receivers: [otlp]
             processors: [batch]
             exporters: [logging]
         traces:
+            # For traces, data received on 0.0.0.0:4317 is processed and then 
+            # exported to the logging exporter.
             receivers: [otlp]
             processors: [batch]
             exporters: [logging]
         metrics:
+            # For metrics, data received on 0.0.0.0:4317 is processed and then 
+            # exported to both logging and prometheus exporters.
             receivers: [otlp]
             processors: [batch]
             exporters: [logging, prometheus]
