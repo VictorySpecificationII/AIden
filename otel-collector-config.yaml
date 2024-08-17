@@ -15,10 +15,10 @@ exporters:
   prometheus:
     endpoint: "0.0.0.0:8889" # collector exposes metrics on this port, localhost:8889/metrics to see
 
-  otlp/jaeger:
-    endpoint: "0.0.0.0:14250"
-    tls:
-      insecure: true
+  # otlp/jaeger:
+  #   endpoint: "0.0.0.0:14250"
+  #   tls:
+  #     insecure: true
 
 # Processors: These are used to process data between receiving and exporting. 
 processors:
@@ -38,7 +38,7 @@ service:
             # exported to the logging exporter.
             receivers: [otlp]
             processors: [batch]
-            exporters: [logging, otlp/jaeger]
+            exporters: [logging]
         metrics:
             # For metrics, data received on 0.0.0.0:4317 is processed and then 
             # exported to both logging and prometheus exporters.
