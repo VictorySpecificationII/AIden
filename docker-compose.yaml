@@ -4,26 +4,24 @@ services:
     image: otel/opentelemetry-collector:latest
     container_name: otel-collector
     command: ["--config=/etc/otel-collector-config.yaml"]
-    networks:
-      - aiden-dev
+    network_mode: "host"
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
-    ports:
-      - "4317:4317"     # OTLP gRPC receiver
-      - "4318:4318"     # OTLP HTTP receiver
-      - "8889:8889"     # Prometheus metrics exporter
-      - "14268:14268"   # Jaeger Thrift receiver for traces
-      - "9200:9200"     # Elasticsearch
+    # ports:
+    #   - "4317:4317"     # OTLP gRPC receiver
+    #   - "4318:4318"     # OTLP HTTP receiver
+    #   - "8889:8889"     # Prometheus metrics exporter
+    #   - "14268:14268"   # Jaeger Thrift receiver for traces
+    #   - "9200:9200"     # Elasticsearch
 
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"     # Prometheus web interface
-    networks:
-      - aiden-dev
+    # ports:
+    #   - "9090:9090"     # Prometheus web interface
+    network_mode: "host"
     depends_on:
       - otel-collector
 
