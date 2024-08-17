@@ -29,9 +29,9 @@ services:
     image: jaegertracing/all-in-one:1.60
     container_name: jaeger
     command: ["--collector.otlp.enabled=false"]
-    # environment:
-    #   - METRICS_STORAGE_TYPE=prometheus
-    #   - PROMETHEUS_SERVER_URL=http://localhost:9090
+    environment:
+      - METRICS_STORAGE_TYPE=prometheus
+      - PROMETHEUS_SERVER_URL=http://localhost:9090
     # ports:
     #   - "5775:5775"    # Zipkin Thrift compact protocol
     #   - "5778:5778"    # Zipkin HTTP server
