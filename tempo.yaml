@@ -6,8 +6,8 @@ storage:
   trace:
     backend: s3
     s3:
-      endpoint: http://s3:9000
+      endpoint: s3:9000
       bucket: tempo
-      access_key: minioadmin
-      secret_key: minioadmin
+      access_key: LsDe5AoQpqTbnqzkjiZF
+      secret_key: oc99nfmc2fswwy5ATZDq5B2qwSSiiBUekZdeyNPM
       insecure: true  # Use `true` for HTTP access without SSL
