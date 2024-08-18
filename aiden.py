@@ -34,20 +34,20 @@ def configure_opentelemetry():
     # Configure tracing
     trace.set_tracer_provider(TracerProvider(resource=resource))
     tracer_provider = trace.get_tracer_provider()
-    otlp_trace_exporter = OTLPSpanExporter(endpoint="http://localhost:4317")
+    otlp_trace_exporter = OTLPSpanExporter(endpoint="http://otel-collector:4317")
     tracer_provider.add_span_processor(BatchSpanProcessor(otlp_trace_exporter))
     
     # Configure logging
     logger_provider = LoggerProvider(resource=resource)
     set_logger_provider(logger_provider)
-    otlp_log_exporter = OTLPLogExporter(endpoint="http://localhost:4317", insecure=True)
+    otlp_log_exporter = OTLPLogExporter(endpoint="http://otel-collector:4317", insecure=True)
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_log_exporter))
     handler = LoggingHandler(level=logging.DEBUG, logger_provider=logger_provider)
     logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.DEBUG)
     
     # Configure metrics
-    exporter = OTLPMetricExporter(endpoint="http://localhost:4317")
+    exporter = OTLPMetricExporter(endpoint="http://otel-collector:4317")
     metric_reader = PeriodicExportingMetricReader(exporter, export_interval_millis=20000)
     meter_provider = MeterProvider(metric_readers=[metric_reader], resource=resource)
     metrics.set_meter_provider(meter_provider)

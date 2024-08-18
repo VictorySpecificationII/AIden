@@ -1,0 +1,13 @@
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 4317
+
+storage:
+  trace:
+    backend: s3
+    s3:
+      endpoint: http://s3:9000
+      bucket: tempo
+      access_key: minioadmin
+      secret_key: minioadmin
+      insecure: true  # Use `true` for HTTP access without SSL

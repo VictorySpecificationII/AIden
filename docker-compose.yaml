@@ -4,27 +4,78 @@ services:
     image: otel/opentelemetry-collector:latest
     container_name: otel-collector
     command: ["--config=/etc/otel-collector-config.yaml"]
-    network_mode: "host"
+    networks:
+      - aiden-dev
+    ports:
+      - "4317:4317"     # OTLP gRPC receiver
+      - "4318:4318"     # OTLP HTTP receiver
+      - "8889:8889"     # Prometheus metrics exporter
+
     volumes:
       - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
-    # ports:
-    #   - "4317:4317"     # OTLP gRPC receiver
-    #   - "4318:4318"     # OTLP HTTP receiver
-    #   - "8889:8889"     # Prometheus metrics exporter
-    #   - "14268:14268"   # Jaeger Thrift receiver for traces
-    #   - "9200:9200"     # Elasticsearch
 
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
+    networks:
+      - aiden-dev
+    ports:
+      - "9090:9090"     # Prometheus web interface
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
-    # ports:
-    #   - "9090:9090"     # Prometheus web interface
-    network_mode: "host"
     depends_on:
       - otel-collector
 
-# networks:
-#   aiden-dev:
-#     name: aiden-dev
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    networks:
+      - aiden-dev
+    ports:
+      - "3200:3200"  # Tempo gRPC/HTTP port
+    environment:
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+    volumes:
+      - ./tempo.yaml:/etc/tempo.yaml
+    command: ["-config.file=/etc/tempo.yaml"]
+    depends_on:
+      - s3
+
+  s3:
+    image: minio/minio:latest
+    container_name: minio
+    networks:
+      - aiden-dev
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_ADDRESS=0.0.0.0
+      - MINIO_PORT=9000
+      - MINIO_STORAGE_USE_HTTPS=0
+      - MINIO_CONSOLE_ADDRESS=0.0.0.0
+    command: server --console-address ":9001" /data
+    volumes:
+      - minio_data:/data
+    depends_on:
+      - otel-collector
+      - prometheus
+
+  fastapi-api:
+    build: .
+    container_name: fastapi-api
+    networks:
+      - aiden-dev
+    ports:
+      - "8000:8000"
+    depends_on:
+      - otel-collector
+
+networks:
+  aiden-dev:
+
+volumes:
+  minio_data:
