@@ -100,12 +100,13 @@ services:
     depends_on:
       - otel-collector
       - prometheus
-      - fastapi-api
+      - api
 
 
-  fastapi-api:
+  api:
     build: .
-    container_name: fastapi-api
+    image: aiden/api:latest  # Use the custom image name here
+    container_name: aiden-api
     networks:
       - aiden-dev
     ports:
