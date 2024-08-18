@@ -21,7 +21,7 @@ exporters:
   #     insecure: true
 
   otlp/tempo:
-    endpoint: "0.0.0.0:4320"  # Use the service name of Tempo from Docker Compose
+    endpoint: "tempo:4320"  # Use the service name of Tempo from Docker Compose
     tls:
       insecure: true  # Disable TLS if not using HTTPS
 
