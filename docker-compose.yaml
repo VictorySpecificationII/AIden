@@ -26,43 +26,65 @@ services:
     depends_on:
       - otel-collector
 
-  tempo:
-    image: grafana/tempo:latest
-    container_name: tempo
+  jaeger:
+    image: jaegertracing/all-in-one:1.60
+    container_name: jaeger
     networks:
       - aiden-dev
-    ports:
-      - "3200:3200"  # Tempo gRPC/HTTP port
+    command: ["--collector.otlp.enabled=true", "--collector.otlp.grpc.host-port=4320", "--collector.otlp.http.host-port=4321"]
     environment:
-      - AWS_ACCESS_KEY_ID=minioadmin
-      - AWS_SECRET_ACCESS_KEY=minioadmin
-    volumes:
-      - ./tempo.yaml:/etc/tempo.yaml
-    command: ["-config.file=/etc/tempo.yaml"]
-    depends_on:
-      - s3
-
-  s3:
-    image: minio/minio:latest
-    container_name: minio
-    networks:
-      - aiden-dev
+      - METRICS_STORAGE_TYPE=prometheus
+      - PROMETHEUS_SERVER_URL=http://prometheus:9090
     ports:
-      - "9000:9000"
-      - "9001:9001"
-    environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
-      - MINIO_ADDRESS=0.0.0.0
-      - MINIO_PORT=9000
-      - MINIO_STORAGE_USE_HTTPS=0
-      - MINIO_CONSOLE_ADDRESS=0.0.0.0
-    command: server --address 0.0.0.0:9000 --console-address ":9001" /data
-    volumes:
-      - minio_data:/data
+      - "14268:14268"  # HTTP transport, applications or agents send trace data to this endpoint over HTTP
+      - "14267:14267"  # gRPC transport, applications or agents send trace data to this endpoint over gRPC
+      - "14399:14399"  # JAEGER_QUERY_PORT
+      - "16686:16686"  # Jaeger UI
+      - "14250:14250"  # Jaeger gRPC, used for gRPC communication within Jaeger's architecture
+      - "5778:5778"    # Jaeger Admin
+      - "44317:4320"   # Onboard Otel Collector gRPC port
+      - "44318:4321"   # Onboard Otel Collector HTTP port
     depends_on:
       - otel-collector
       - prometheus
+
+  # tempo:
+  #   image: grafana/tempo:latest
+  #   container_name: tempo
+  #   networks:
+  #     - aiden-dev
+  #   ports:
+  #     - "3200:3200"  # Tempo gRPC/HTTP port
+  #   environment:
+  #     - AWS_ACCESS_KEY_ID=minioadmin
+  #     - AWS_SECRET_ACCESS_KEY=minioadmin
+  #   volumes:
+  #     - ./tempo.yaml:/etc/tempo.yaml
+  #   command: ["-config.file=/etc/tempo.yaml"]
+  #   depends_on:
+  #     - s3
+
+  # s3:
+  #   image: minio/minio:latest
+  #   container_name: minio
+  #   networks:
+  #     - aiden-dev
+  #   ports:
+  #     - "9000:9000"
+  #     - "9001:9001"
+  #   environment:
+  #     - MINIO_ROOT_USER=minioadmin
+  #     - MINIO_ROOT_PASSWORD=minioadmin
+  #     - MINIO_ADDRESS=0.0.0.0
+  #     - MINIO_PORT=9000
+  #     - MINIO_STORAGE_USE_HTTPS=0
+  #     - MINIO_CONSOLE_ADDRESS=0.0.0.0
+  #   command: server --address 0.0.0.0:9000 --console-address ":9001" /data
+  #   volumes:
+  #     - minio_data:/data
+  #   depends_on:
+  #     - otel-collector
+  #     - prometheus
 
   grafana:
     image: grafana/grafana:latest
@@ -78,8 +100,7 @@ services:
     depends_on:
       - otel-collector
       - prometheus
-      - s3
-      - tempo  # Ensure Tempo starts before Grafana
+      - fastapi-api
 
 
   fastapi-api:

@@ -15,15 +15,15 @@ exporters:
   prometheus:
     endpoint: "0.0.0.0:8889" # collector exposes metrics on this port, localhost:8889/metrics to see
 
-  # otlp/jaeger:
-  #   endpoint: "0.0.0.0:14250"
-  #   tls:
-  #     insecure: true
-
-  otlp/tempo:
-    endpoint: "tempo:4320"  # Use the service name of Tempo from Docker Compose
+  otlp/jaeger:
+    endpoint: "jaeger:4320"
     tls:
-      insecure: true  # Disable TLS if not using HTTPS
+      insecure: true
+
+  # otlp/tempo:
+  #   endpoint: "tempo:4320"  # Use the service name of Tempo from Docker Compose
+  #   tls:
+  #     insecure: true  # Disable TLS if not using HTTPS
 
 # Processors: These are used to process data between receiving and exporting. 
 processors:
@@ -43,7 +43,7 @@ service:
             # exported to the logging and tempo exporters.
             receivers: [otlp]
             processors: [batch]
-            exporters: [logging, otlp/tempo]
+            exporters: [logging, otlp/jaeger]
         metrics:
             # For metrics, data received on 0.0.0.0:4317 is processed and then 
             # exported to both logging and prometheus exporters.
