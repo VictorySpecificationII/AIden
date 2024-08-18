@@ -8,6 +8,6 @@ storage:
     s3:
       endpoint: s3:9000
       bucket: tempo
-      access_key: LsDe5AoQpqTbnqzkjiZF
-      secret_key: oc99nfmc2fswwy5ATZDq5B2qwSSiiBUekZdeyNPM
+      access_key: minioadmin
+      secret_key: minioadmin
       insecure: true  # Use `true` for HTTP access without SSL

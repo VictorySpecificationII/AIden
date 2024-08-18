@@ -57,7 +57,7 @@ services:
       - MINIO_PORT=9000
       - MINIO_STORAGE_USE_HTTPS=0
       - MINIO_CONSOLE_ADDRESS=0.0.0.0
-    command: server --console-address ":9001" /data
+    command: server --address 0.0.0.0:9000 --console-address ":9001" /data
     volumes:
       - minio_data:/data
     depends_on:
