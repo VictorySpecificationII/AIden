@@ -20,6 +20,11 @@ exporters:
   #   tls:
   #     insecure: true
 
+  otlp/tempo:
+    endpoint: "0.0.0.0:4320"  # Use the service name of Tempo from Docker Compose
+    tls:
+      insecure: true  # Disable TLS if not using HTTPS
+
 # Processors: These are used to process data between receiving and exporting. 
 processors:
   batch:
@@ -35,10 +40,10 @@ service:
             exporters: [logging]
         traces:
             # For traces, data received on 0.0.0.0:4317 is processed and then 
-            # exported to the logging exporter.
+            # exported to the logging and tempo exporters.
             receivers: [otlp]
             processors: [batch]
-            exporters: [logging]
+            exporters: [logging, otlp/tempo]
         metrics:
             # For metrics, data received on 0.0.0.0:4317 is processed and then 
             # exported to both logging and prometheus exporters.
