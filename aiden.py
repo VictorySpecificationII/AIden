@@ -29,7 +29,7 @@ import asyncio
 api = FastAPI()
 
 def configure_opentelemetry():
-    resource = Resource.create({"service.name": "fastapi-service"})
+    resource = Resource.create({"service.name": "aiden-api"})
     
     # Configure tracing
     trace.set_tracer_provider(TracerProvider(resource=resource))
