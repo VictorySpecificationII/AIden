@@ -68,6 +68,15 @@ services:
     depends_on:
       - otel-collector
 
+  heimdall:
+    image: linuxserver/heimdall:latest
+    container_name: heimdall
+    ports:
+      - "8091:80"
+    volumes:
+      - heimdall-data:/config
+    networks:
+      - aiden-dev
   # tempo:
   #   image: grafana/tempo:latest
   #   container_name: tempo
@@ -140,3 +149,4 @@ volumes:
   minio_data:
   grafana-data:
   elastic-data:  # Elasticsearch data volume
+  heimdall-data:

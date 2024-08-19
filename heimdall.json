@@ -1,0 +1,50 @@
+[
+  {
+    "title": "API Page",
+    "colour": "#DFA",
+    "url": "http://localhost:8000/docs",
+    "description": null,
+    "appid": "null",
+    "appdescription": null
+  },
+  {
+    "title": "API Documentation",
+    "colour": "#AFA",
+    "url": "http://localhost:8000/redoc",
+    "description": null,
+    "appid": "null",
+    "appdescription": null
+  },
+  {
+    "title": "Grafana",
+    "colour": "#FDA",
+    "url": "http://localhost:3000",
+    "description": null,
+    "appid": "f519bce8b0ae84d8dbbc0a793bf6a180043be855",
+    "appdescription": "Data visualization & Monitoring with support for Graphite, InfluxDB, Prometheus, Elasticsearch and many more databases."
+  },
+  {
+    "title": "Prometheus",
+    "colour": "#FFA",
+    "url": "http://localhost:9090",
+    "description": null,
+    "appid": "aad8f23c2fa06d46c52ae4e06c8d4bdac6074b8f",
+    "appdescription": "Prometheus, a Cloud Native Computing Foundation project, is a systems and service monitoring system. It collects metrics from configured targets at given intervals, evaluates rule expressions, displays the results, and can trigger alerts if some condition is observed to be true."
+  },
+  {
+    "title": "Kibana",
+    "colour": "#fafbfc",
+    "url": "http://localhost:5601",
+    "description": null,
+    "appid": "80d4015f1f71198cb285a89daf9796ebde0b5c29",
+    "appdescription": "Kibana lets you visualise your Elasticsearch data and navigate the Elastic Stack."
+  },
+  {
+    "title": "Jaeger",
+    "colour": "#AFD",
+    "url": "http://localhost:16686",
+    "description": "{\"enabled\":\"0\",\"override_url\":null,\"service\":\"jaeger-query\",\"operation\":null,\"tags\":null,\"lookback\":\"1h\",\"limit\":\"100\",\"minDuration\":null,\"maxDuration\":null}",
+    "appid": "917883dc82d936304725edacb6bf11e5cf537be6",
+    "appdescription": "Jaeger is a distributed tracing platform, which can be used for monitoring microservices-based distributed systems."
+  }
+]

@@ -28,3 +28,16 @@ docker logs -f otel-collector
 ```bash
 uvicorn aiden:api --reload
 ```
+
+## Extras
+
+The deployment includes Heimdall, an application dashboard. To make use of it:
+
+ - Navigate to
+```bash
+http://localhost:8091
+```
+ - Click Settings > Import > Browse
+ - Select heimdall.json from the project directory and hit "Import"
+
+ Now you have an application dashboard you can use for quick access.
