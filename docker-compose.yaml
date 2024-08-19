@@ -48,6 +48,26 @@ services:
       - otel-collector
       - prometheus
 
+
+  # Elasticsearch service
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.7.0
+    container_name: elasticsearch
+    environment:
+      - node.name=es01
+      - cluster.name=logs-cluster
+      - discovery.type=single-node
+      - ELASTIC_PASSWORD=changeme
+    ports:
+      - "9200:9200"  # HTTP
+      - "9300:9300"  # Transport
+    networks:
+      - aiden-dev
+    volumes:
+      - elastic-data:/usr/share/elasticsearch/data
+    depends_on:
+      - otel-collector
+
   # tempo:
   #   image: grafana/tempo:latest
   #   container_name: tempo
@@ -102,7 +122,6 @@ services:
       - prometheus
       - api
 
-
   api:
     build: .
     image: aiden/api:latest  # Use the custom image name here
@@ -120,3 +139,4 @@ networks:
 volumes:
   minio_data:
   grafana-data:
+  elastic-data:  # Elasticsearch data volume
