@@ -59,6 +59,11 @@ services:
       - discovery.type=single-node
       - ELASTIC_PASSWORD=changeme
       - xpack.security.enabled=false
+      # - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
     ports:
       - "9200:9200"  # HTTP
       - "9300:9300"  # Transport
@@ -69,15 +74,26 @@ services:
     depends_on:
       - otel-collector
 
-  heimdall:
-    image: linuxserver/heimdall:latest
-    container_name: heimdall
-    ports:
-      - "8091:80"
-    volumes:
-      - heimdall-data:/config
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.7.0
+    container_name: logstash
     networks:
       - aiden-dev
+    ports:
+      - "5044:5044"    # Logstash Beats input
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    # environment:
+    #   - "LS_JAVA_OPTS=-Xms256m -Xmx256m"
+    # command: >
+    #   sh -c "/usr/local/bin/docker-entrypoint -Xms256m -Xmx256m"
+    volumes:
+      - ./logstash_config.conf:/usr/share/logstash/config/logstash.yml
+      - ./logstash_pipeline.conf/:/usr/share/logstash/pipeline/pipeline.conf  # Pipeline configurations
+    depends_on:
+      - elasticsearch
 
   kibana:
     image: docker.elastic.co/kibana/kibana:8.7.0
@@ -86,6 +102,10 @@ services:
       - elasticsearch
     ports:
       - "5601:5601"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
     volumes:
       - kibana-data:/usr/share/kibana/data
     networks:
@@ -144,6 +164,16 @@ services:
       - otel-collector
       - prometheus
       - api
+
+  heimdall:
+    image: linuxserver/heimdall:latest
+    container_name: heimdall
+    ports:
+      - "8091:80"
+    volumes:
+      - heimdall-data:/config
+    networks:
+      - aiden-dev
 
   api:
     build: .
