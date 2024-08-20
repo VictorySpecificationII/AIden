@@ -80,7 +80,7 @@ services:
     networks:
       - aiden-dev
     ports:
-      - "5044:5044"    # Logstash Beats input
+      - "5044:5045"    # Logstash Beats input
     deploy:
       resources:
         limits:
