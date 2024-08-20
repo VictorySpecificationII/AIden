@@ -58,6 +58,7 @@ services:
       - cluster.name=logs-cluster
       - discovery.type=single-node
       - ELASTIC_PASSWORD=changeme
+      - xpack.security.enabled=false
     ports:
       - "9200:9200"  # HTTP
       - "9300:9300"  # Transport
@@ -77,6 +78,19 @@ services:
       - heimdall-data:/config
     networks:
       - aiden-dev
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.7.0
+    container_name: kibana
+    depends_on:
+      - elasticsearch
+    ports:
+      - "5601:5601"
+    volumes:
+      - kibana-data:/usr/share/kibana/data
+    networks:
+      - aiden-dev
+
   # tempo:
   #   image: grafana/tempo:latest
   #   container_name: tempo
@@ -148,5 +162,6 @@ networks:
 volumes:
   minio_data:
   grafana-data:
-  elastic-data:  # Elasticsearch data volume
+  elastic-data:
+  kibana-data:
   heimdall-data:
