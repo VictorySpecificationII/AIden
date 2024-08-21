@@ -111,44 +111,6 @@ services:
     networks:
       - aiden-dev
 
-  # tempo:
-  #   image: grafana/tempo:latest
-  #   container_name: tempo
-  #   networks:
-  #     - aiden-dev
-  #   ports:
-  #     - "3200:3200"  # Tempo gRPC/HTTP port
-  #   environment:
-  #     - AWS_ACCESS_KEY_ID=minioadmin
-  #     - AWS_SECRET_ACCESS_KEY=minioadmin
-  #   volumes:
-  #     - ./tempo.yaml:/etc/tempo.yaml
-  #   command: ["-config.file=/etc/tempo.yaml"]
-  #   depends_on:
-  #     - s3
-
-  # s3:
-  #   image: minio/minio:latest
-  #   container_name: minio
-  #   networks:
-  #     - aiden-dev
-  #   ports:
-  #     - "9000:9000"
-  #     - "9001:9001"
-  #   environment:
-  #     - MINIO_ROOT_USER=minioadmin
-  #     - MINIO_ROOT_PASSWORD=minioadmin
-  #     - MINIO_ADDRESS=0.0.0.0
-  #     - MINIO_PORT=9000
-  #     - MINIO_STORAGE_USE_HTTPS=0
-  #     - MINIO_CONSOLE_ADDRESS=0.0.0.0
-  #   command: server --address 0.0.0.0:9000 --console-address ":9001" /data
-  #   volumes:
-  #     - minio_data:/data
-  #   depends_on:
-  #     - otel-collector
-  #     - prometheus
-
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
@@ -190,7 +152,6 @@ networks:
   aiden-dev:
 
 volumes:
-  minio_data:
   grafana-data:
   elastic-data:
   kibana-data:
