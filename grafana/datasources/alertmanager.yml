@@ -13,3 +13,4 @@ datasources:
     jsonData:
       httpMethod: GET
       implementation: prometheus
+      handleGrafanaManagedAlerts: true
