@@ -749,7 +749,53 @@
   "schemaVersion": 39,
   "tags": [],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Metrics Datasource",
+        "multi": false,
+        "name": "DS_PROMETHEUS",
+        "options": [],
+        "query": "prometheus",
+        "queryValue": "",
+        "refresh": 1,
+        "regex": "Prometheus",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Traces Datasource",
+        "multi": false,
+        "name": "DS_JAEGER",
+        "options": [],
+        "query": "jaeger",
+        "queryValue": "",
+        "refresh": 1,
+        "regex": "Jaeger",
+        "skipUrlSync": false,
+        "type": "datasource"
+      },
+      {
+        "current": {},
+        "hide": 0,
+        "includeAll": false,
+        "label": "Logs Datasource",
+        "multi": false,
+        "name": "DS_ELASTICSEARCH",
+        "options": [],
+        "query": "elasticsearch",
+        "queryValue": "",
+        "refresh": 1,
+        "regex": "Elasticsearch",
+        "skipUrlSync": false,
+        "type": "datasource"
+      }
+    ]
   },
   "time": {
     "from": "now-6h",
@@ -757,8 +803,8 @@
   },
   "timepicker": {},
   "timezone": "browser",
-  "title": "Home Dashboard",
-  "uid": "bdviix59nhxq8e",
+  "title": "AIden's Vitals",
+  "uid": "fdvildgaxrcaod",
   "version": 1,
   "weekStart": ""
 }
