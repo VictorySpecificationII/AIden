@@ -26,6 +26,19 @@ services:
     depends_on:
       - otel-collector
 
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    networks:
+      - dev
+    volumes:
+      - "./alertmanager.yml:/etc/alertmanager/alertmanager.yml"
+      - alertmanager-data:/data
+    command: --config.file=/etc/alertmanager/alertmanager.yml --log.level=debug
+
   jaeger:
     image: jaegertracing/all-in-one:1.60
     container_name: jaeger
@@ -158,3 +171,4 @@ volumes:
   elastic-data:
   kibana-data:
   heimdall-data:
+  alertmanager-data:
