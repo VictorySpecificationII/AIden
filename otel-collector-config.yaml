@@ -20,10 +20,10 @@ exporters:
     tls:
       insecure: true
 
-  otlp/logstash:
-    endpoint: "logstash:5045"
-    tls:
-      insecure: true
+  otlphttp/logstash:
+    endpoint: "http://logstash:5045/v1/logs"  # Correct HTTP endpoint for Logstash
+    headers:
+      Content-Type: "application/json"
 
   # otlp/tempo:
   #   endpoint: "tempo:4320"  # Use the service name of Tempo from Docker Compose
@@ -42,7 +42,7 @@ service:
             # processed and then exported to the logging and logstash (ELK) exporters.
             receivers: [otlp]
             processors: [batch]
-            exporters: [logging, otlp/logstash]
+            exporters: [logging, otlphttp/logstash]
         traces:
             # For traces, data received on 0.0.0.0:4317 is processed and then 
             # exported to the logging and Jaeger exporters.

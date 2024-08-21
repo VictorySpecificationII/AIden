@@ -5,7 +5,7 @@ services:
     container_name: otel-collector
     command: ["--config=/etc/otel-collector-config.yaml"]
     networks:
-      - aiden-dev
+      - dev
     ports:
       - "4317:4317"     # OTLP gRPC receiver
       - "4318:4318"     # OTLP HTTP receiver
@@ -18,7 +18,7 @@ services:
     image: prom/prometheus:latest
     container_name: prometheus
     networks:
-      - aiden-dev
+      - dev
     ports:
       - "9090:9090"     # Prometheus web interface
     volumes:
@@ -30,7 +30,7 @@ services:
     image: jaegertracing/all-in-one:1.60
     container_name: jaeger
     networks:
-      - aiden-dev
+      - dev
     command: ["--collector.otlp.enabled=true", "--collector.otlp.grpc.host-port=4320", "--collector.otlp.http.host-port=4321"]
     environment:
       - METRICS_STORAGE_TYPE=prometheus
@@ -68,7 +68,7 @@ services:
       - "9200:9200"  # HTTP
       - "9300:9300"  # Transport
     networks:
-      - aiden-dev
+      - dev
     volumes:
       - elastic-data:/usr/share/elasticsearch/data
     depends_on:
@@ -78,7 +78,7 @@ services:
     image: docker.elastic.co/logstash/logstash:8.7.0
     container_name: logstash
     networks:
-      - aiden-dev
+      - dev
     ports:
       - "5044:5045"    # Logstash Beats input
     deploy:
@@ -105,11 +105,11 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 512M
     volumes:
       - kibana-data:/usr/share/kibana/data
     networks:
-      - aiden-dev
+      - dev
 
   grafana:
     image: grafana/grafana:latest
@@ -121,7 +121,7 @@ services:
     volumes:
       - grafana-data:/var/lib/grafana
     networks:
-      - aiden-dev
+      - dev
     depends_on:
       - otel-collector
       - prometheus
@@ -135,21 +135,21 @@ services:
     volumes:
       - heimdall-data:/config
     networks:
-      - aiden-dev
+      - dev
 
   api:
     build: .
     image: aiden/api:latest  # Use the custom image name here
     container_name: aiden-api
     networks:
-      - aiden-dev
+      - dev
     ports:
       - "8000:8000"
     depends_on:
       - otel-collector
 
 networks:
-  aiden-dev:
+  dev:
 
 volumes:
   grafana-data:
