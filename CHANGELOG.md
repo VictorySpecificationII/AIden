@@ -1,13 +1,12 @@
-# Changelog
+# CHANGELOG
 
 ## Version: 0.0.1
 **Date:** 2024-08-16
 
 ### Changes:
-
 1. **Metric Name Prefixing:**
-   - Added the prefix `aiden_` to all custom metric names to make them easily identifiable in Prometheus.
-   - Updated the following metric names:
+   - Added prefix `aiden_` to custom metric names for better identification in Prometheus.
+   - Updated metric names:
      - `service_latency` → `aiden_service_latency`
      - `service_requests` → `aiden_service_requests`
      - `service_errors` → `aiden_service_errors`
@@ -15,24 +14,23 @@
      - `ram_percent` → `aiden_ram_percent`
 
 2. **Refactoring for Deduplication:**
-   - **Consolidated Metric, Logging, and Tracing Configuration:**
-     - Merged the configuration of metrics, logs, and traces into a single `configure_opentelemetry()` function to avoid duplication and improve maintainability.
-     - Unified the resource creation step for logs, metrics, and traces using a single `Resource` object, ensuring consistency across all telemetry data.
+   - **Consolidated Configuration:**
+     - Merged metrics, logs, and traces into a single `configure_opentelemetry()` function for improved maintainability.
+     - Unified resource creation for logs, metrics, and traces with a single `Resource` object.
    - **Removed Redundant Middleware:**
-     - Combined the previously separate middleware functions for tracing and metrics into a single `telemetry_middleware()` function, reducing code duplication and streamlining request handling.
+     - Combined tracing and metrics middleware into `telemetry_middleware()` to reduce duplication.
    - **Logging Configuration Simplification:**
-     - Moved all logging configuration into the `configure_opentelemetry()` function to ensure a single, unified logging setup, removing the need for multiple handlers or separate logger setups.
+     - Moved all logging configuration into `configure_opentelemetry()` for a unified setup.
 
 3. **Code Cleanup:**
    - **Simplified Imports:**
-     - Removed unnecessary imports and streamlined the import section for better clarity and maintainability.
+     - Removed unnecessary imports for better clarity and maintainability.
 
 4. **Port Configuration Update:**
-   - Changed the OTLP exporter port from `8888` to `8889` due to port `8888` being occupied. This change was necessary to prevent the OTLP collector from shutting down.
+   - Changed OTLP exporter port from `8888` to `8889` to avoid conflict with port `8888`.
 
-### TODO
-
-- **Metrics Visibility:** Noted that metrics (`aiden_service_latency`, `aiden_service_requests`, and `aiden_service_errors`) may not appear in Prometheus until API endpoints are invoked. Ensure to execute API requests to see metrics data.
+### TODO:
+- **Metrics Visibility:** Metrics may not appear in Prometheus until API endpoints are invoked. Execute API requests to see metrics data.
 
 ---
 
@@ -40,37 +38,33 @@
 **Date:** 2024-08-18
 
 ### Changes:
-
 1. **Build Process Update:**
-   - Added the image name to the build process for better identification and management during deployment.
+   - Added image name to the build process for better deployment management.
 
 2. **Service Renaming:**
-   - Renamed the tracing service from `tracing-service` to `aiden-api` for consistency with other service names.
+   - Renamed tracing service from `tracing-service` to `aiden-api` for consistency.
 
 3. **Jaeger Integration and Configuration:**
-   - Enabled the OpenTelemetry (OTel) collector on Jaeger with gRPC on port `4320` and HTTP on port `4321`.
-   - Modified the OTel configuration to include Jaeger.
+   - Enabled OTLP collector on Jaeger with gRPC on port `4320` and HTTP on port `4321`.
+   - Modified OTel configuration to include Jaeger.
 
 4. **Grafana Addition:**
-   - Added Grafana to the Docker Compose setup for enhanced monitoring and visualization.
+   - Added Grafana to Docker Compose for enhanced monitoring.
 
 5. **Removal of Tempo and MinIO:**
-   - **Tempo:** Removed Tempo from the Docker setup due to unresolved issues and the decision to simplify the tracing setup.
-   - **MinIO:** Removed MinIO from the Docker setup, including its associated configuration and access keys, to streamline the services being managed.
+   - **Tempo:** Removed due to unresolved issues, simplifying the tracing setup.
+   - **MinIO:** Removed to streamline services managed.
 
 6. **Jaeger Setup Adjustments:**
-   - Removed Jaeger from the setup, later re-added it to the Docker Compose configuration along with the OTLP exporter in the OTel collector configuration.
-   - Removed a duplicate Jaeger entry in the Docker Compose file.
-   - Documented the OTLP exporter configuration in the setup.
+   - Removed, then re-added Jaeger to Docker Compose with OTLP exporter configuration.
+   - Removed duplicate Jaeger entry and documented OTLP exporter configuration.
 
 7. **Prometheus and Networking Configuration:**
-   - Added a Prometheus server to the Jaeger configuration.
-   - Modified the Prometheus configuration for better integration.
-   - Adjusted the Docker network mode to `host` for enhanced network handling.
-   - Commented out unnecessary network entries in the Docker Compose file.
+   - Added Prometheus server to Jaeger configuration.
+   - Modified Prometheus configuration and adjusted Docker network mode to `host`.
 
 ### Summary:
-This update focuses on refining the tracing and monitoring setup by integrating Jaeger more tightly with the OpenTelemetry collector and adding Grafana for visualization. Tempo and MinIO were removed from the Docker setup to reduce complexity and focus on core services. The tracing service has been renamed for consistency, and several configurations have been fine-tuned to ensure smooth operation across the environment.
+Refined tracing and monitoring setup with Jaeger and Grafana, removed Tempo and MinIO to reduce complexity. Adjusted configurations for consistency and improved network handling.
 
 ---
 
@@ -78,48 +72,85 @@ This update focuses on refining the tracing and monitoring setup by integrating 
 **Date:** 2024-08-21
 
 ### Changes:
-
 1. **Logstash Integration:**
-   - **Added OTLP HTTP Exporter for Logstash:**
-     - Configured the OpenTelemetry Collector to export logs via OTLP over HTTP to Logstash.
-     - Updated the Logstash endpoint configuration in the OpenTelemetry Collector to `http://logstash:5045`.
+   - **Added OTLP HTTP Exporter:**
+     - Configured OpenTelemetry Collector to export logs via OTLP over HTTP to Logstash.
+     - Updated Logstash endpoint configuration to `http://logstash:5045`.
 
 2. **Configuration Fixes:**
    - **Updated OTLP Exporter Configuration:**
-     - Corrected the OTLP exporter configuration for HTTP in the OpenTelemetry Collector, ensuring proper communication with Logstash.
+     - Corrected OTLP exporter configuration for HTTP in OpenTelemetry Collector.
    - **Resolved Endpoint Issues:**
-     - Adjusted the endpoint path and simplified it to `http://logstash:5045` to resolve errors related to unsupported protocol schemes and connection resets.
+     - Simplified endpoint path to `http://logstash:5045` to address protocol and connection issues.
    - **Adjusted Logstash Input Configuration:**
-     - Verified and updated the Logstash HTTP input plugin configuration to match the expected data format and port.
+     - Updated Logstash HTTP input plugin configuration for proper data format and port.
 
 3. **Debugging and Validation:**
    - **Verified Connectivity:**
-     - Confirmed successful data transmission from the OpenTelemetry Collector to Logstash.
+     - Confirmed successful data transmission from OpenTelemetry Collector to Logstash.
    - **Resolved `Connection Reset by Peer` Error:**
-     - Addressed network and configuration issues that caused intermittent connection resets, ensuring stable data flow.
+     - Addressed network and configuration issues causing connection resets.
 
 4. **ELK Stack Deployment:**
    - **Deployed ELK Stack:**
-     - Successfully deployed Elasticsearch, Logstash, and Kibana as part of the observability stack.
+     - Deployed Elasticsearch, Logstash, and Kibana.
    - **Set Memory Limits:**
-     - Configured memory limits to `512MB` for each ELK stack service to manage resource usage and improve stability.
+     - Configured memory limits to `512MB` for each ELK stack service.
 
 5. **Heimdall Application Panel:**
    - **Added Heimdall Panel:**
-     - Integrated a Heimdall application panel into the stack for centralized navigation.
-     - Added a JSON file for Heimdall configuration, which users can manually import via the Heimdall UI to access a centralized point for navigating the observability stack.
+     - Integrated Heimdall panel for centralized navigation.
+     - Added JSON file for Heimdall configuration.
 
 6. **Docker Compose and Configuration Cleanup:**
    - **Removed MinIO and Tempo Entries:**
-     - Removed MinIO and Tempo services from the Docker Compose file to simplify the setup.
-   - **Cleaned Up Tempo Configuration:**
-     - Removed Tempo-related configuration from the `otel-collector-config.yaml` to tidy up and streamline the setup.
+     - Removed services from Docker Compose file and cleaned up related configurations.
 
 7. **Documentation and Summary Updates:**
    - **Updated Summary:**
-     - Documented recent fixes, configuration updates, ELK stack deployment, the addition of the Heimdall panel, and the cleanup of unused services and configurations to ensure accurate reflection of the current observability setup.
+     - Documented recent fixes, ELK stack deployment, Heimdall panel addition, and cleanup of unused services.
 
-### TODO
+### TODO:
+- **Metrics Visibility:** Metrics may not appear in Prometheus until API endpoints are invoked.
+- **Log Formatting:** Improve log formatting through Logstash pipeline for better analysis.
 
-- **Metrics Visibility:** Noted that metrics (`aiden_service_latency`, `aiden_service_requests`, and `aiden_service_errors`) may not appear in Prometheus until API endpoints are invoked. Ensure to execute API requests to see metrics data.
-- **Log Formatting:** Logs need to be formatted better through a Logstash pipeline to ensure they are properly structured and easier to analyze.
+---
+
+## Version: 0.0.4
+**Date:** 2024-08-22
+
+### Changes:
+
+1. **Alertmanager Container Deployment:**
+   - **Deployment Configuration:**
+     - Deployed the Alertmanager container using Docker Compose.
+     - Configured the container with the image `prom/alertmanager:latest` and mapped port `9093` to the host.
+     - Mounted the configuration file from the host to the container to manage Alertmanager settings.
+   - **Configuration File:**
+     - The Alertmanager configuration file was mounted to `/etc/alertmanager/alertmanager.yml` inside the container.
+     - Adjusted the Docker Compose configuration to ensure proper mounting and file path alignment.
+     - Example configuration file location on the host: `./alertmanager.yml`
+     - Ensured the `--config.file=/config/alertmanager.yml` command-line argument in Docker Compose points to the correct configuration file path.
+
+2. **Grafana Alerting Configuration:**
+   - **Provisioned Alertmanager Datasource:**
+     - Configured Grafana to use Alertmanager as a datasource with URL `http://alertmanager:9093`.
+     - Attempted to specify Prometheus as the implementation for Alertmanager using `jsonData` with `implementation: prometheus`.
+   - **Enabled “Receive Grafana Alerts” Option:**
+     - Enabled the option to receive Grafana alerts in the Alertmanager datasource settings.
+     - Investigated configuration for forwarding alerts from Grafana to Alertmanager.
+
+3. **Provisioning Configurations:**
+   - **Provisioned Datasources:**
+     - Configured Grafana to auto-provision the following datasources:
+       - Prometheus
+       - Jaeger
+       - Elasticsearch
+       - Alertmanager
+     - Ensured these datasources are properly set up and integrated with Grafana for monitoring and visualization.
+
+### TODO:
+- **Alertmanager Integration:** Finalize the integration of Alertmanager with Grafana and ensure proper alert forwarding.
+- **Configuration Validation:** Validate and test configurations for Alertmanager, Prometheus, Jaeger, and Elasticsearch to ensure reliable operation.
+
+---
