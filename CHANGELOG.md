@@ -154,3 +154,30 @@ Refined tracing and monitoring setup with Jaeger and Grafana, removed Tempo and 
 - **Configuration Validation:** Validate and test configurations for Alertmanager, Prometheus, Jaeger, and Elasticsearch to ensure reliable operation.
 
 ---
+
+## Version: 0.0.5
+**Date:** 2024-08-22
+
+### Changes:
+
+1. **MLflow Integration:**
+   - **Added MLflow:**
+     - Integrated MLflow for model tracking.
+     - Configured MLflow to use PostgreSQL as its database.
+     - Set up MLflow to communicate with MinIO as its backing store.
+   - **MinIO Configuration:**
+     - Deployed MinIO to serve as the storage backend for MLflow.
+     - Created an MLflow S3 bucket and configured access keys for communication with MinIO.
+
+2. **Access Key Issue Fix:**
+   - **Resolved Access Key Length Issue:**
+     - Fixed issue where access key creation failed due to key length exceeding 20 characters.
+
+3. **Configuration Refactoring:**
+   - **Organized Configuration Files:**
+     - Moved Logstash, Prometheus, Alertmanager, and OpenTelemetry Collector configuration files into their respective folders.
+     - Updated Docker Compose configuration to reflect the new file locations and ensure proper setup.
+
+### Validation:
+- **MLflow and MinIO:** Verified MLflow’s integration with MinIO and PostgreSQL.
+- **Configuration Testing:** Tested new configurations for Logstash, Prometheus, Alertmanager, and OpenTelemetry Collector to ensure proper functionality.
