@@ -12,7 +12,7 @@ services:
       - "8889:8889"     # Prometheus metrics exporter
 
     volumes:
-      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+      - ./opentelemetry/otel-collector-config.yaml:/etc/otel-collector-config.yaml
 
   prometheus:
     image: prom/prometheus:latest
@@ -22,7 +22,7 @@ services:
     ports:
       - "9090:9090"     # Prometheus web interface
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     depends_on:
       - otel-collector
 
@@ -35,7 +35,7 @@ services:
     networks:
       - dev
     volumes:
-      - "./alertmanager.yml:/etc/alertmanager/alertmanager.yml"
+      - "./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml"
       - alertmanager-data:/data
     command: --config.file=/etc/alertmanager/alertmanager.yml --log.level=debug
 
