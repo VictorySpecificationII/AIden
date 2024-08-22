@@ -103,8 +103,8 @@ services:
     # command: >
     #   sh -c "/usr/local/bin/docker-entrypoint -Xms256m -Xmx256m"
     volumes:
-      - ./logstash_config.conf:/usr/share/logstash/config/logstash.yml
-      - ./logstash_pipeline.conf/:/usr/share/logstash/pipeline/pipeline.conf  # Pipeline configurations
+      - ./logstash/logstash_config.conf:/usr/share/logstash/config/logstash.yml
+      - ./logstash/logstash_pipeline.conf/:/usr/share/logstash/pipeline/pipeline.conf  # Pipeline configurations
     depends_on:
       - elasticsearch
 
