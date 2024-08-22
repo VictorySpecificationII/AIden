@@ -153,7 +153,9 @@ services:
       - dev
 
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile_AIden
     image: aiden/api:latest  # Use the custom image name here
     container_name: aiden-api
     networks:
@@ -169,6 +171,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile_MLFlow
+    image: mlflow/mlflow:latest  # Use the custom image name here
     container_name: mlflow
     depends_on:
       - postgres
