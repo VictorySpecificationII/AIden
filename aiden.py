@@ -28,6 +28,7 @@ import asyncio
 
 api = FastAPI()
 
+
 def configure_opentelemetry():
     resource = Resource.create({"service.name": "aiden-api"})
     
@@ -72,6 +73,10 @@ def get_ram_usage_callback(_):
 
 cpu_gauge = meter.create_observable_gauge(callbacks=[get_cpu_usage_callback], name="aiden_cpu_percent", description="per-cpu usage", unit="1")
 ram_gauge = meter.create_observable_gauge(callbacks=[get_ram_usage_callback], name="aiden_ram_percent", description="RAM memory usage", unit="1")
+
+
+# Instrument the FastAPI app for tracing
+FastAPIInstrumentor.instrument_app(api)
 
 @api.middleware("http")
 async def telemetry_middleware(request: Request, call_next):
