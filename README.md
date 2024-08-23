@@ -15,18 +15,27 @@ pip install -r requirements.txt
 
 ## Usage
 
+### Isolated from the rest of the stack
+
 First, enable the Otel Collector, then run the API.
 
-### Enable Otel Collector
+#### Enable Otel Collector
 
 ```bash
 docker-compose up -d
 docker logs -f otel-collector
 ```
-### Run API
+#### Run API
 
 ```bash
+cd src/api/v1
 uvicorn aiden:api --reload
+```
+
+### Docker Compose
+
+```bash
+docker-compose up -d
 ```
 
 ## Extras
