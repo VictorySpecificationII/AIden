@@ -155,7 +155,7 @@ services:
   api:
     build:
       context: .
-      dockerfile: Dockerfile_AIden
+      dockerfile: ./Dockerfiles/Dockerfile_AIden
     image: aiden/api:latest  # Use the custom image name here
     container_name: aiden-api
     networks:
@@ -170,7 +170,7 @@ services:
     restart: always
     build:
       context: .
-      dockerfile: Dockerfile_MLFlow
+      dockerfile: ./Dockerfiles/Dockerfile_MLFlow
     image: mlflow/mlflow:latest  # Use the custom image name here
     container_name: mlflow
     depends_on:
