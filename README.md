@@ -19,10 +19,14 @@ pip install -r requirements.txt
 
 First, enable the Otel Collector, then run the API.
 
+#### Modify API otel-collector URL's
+
+Modify the code in src/api/v1/aiden.py to point to localhost:4317 instead of otel-collector:4317
+
 #### Enable Otel Collector
 
 ```bash
-docker-compose up -d
+docker-compose up -d otel-collector
 docker logs -f otel-collector
 ```
 #### Run API
@@ -33,6 +37,13 @@ uvicorn aiden:api --reload
 ```
 
 ### Docker Compose
+
+#### Modify API otel-collector URL's
+
+If you haven't modified the API observability URL's in the code, no need to do anything.
+If you have (i.e ran it with the method above), just replace localhost with otel-collector.
+
+#### Spin up stack
 
 ```bash
 docker-compose up -d
