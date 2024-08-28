@@ -12,7 +12,7 @@ services:
       - "8889:8889"     # Prometheus metrics exporter
 
     volumes:
-      - ./opentelemetry/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+      - ./tools/sre/opentelemetry/otel-collector-config.yaml:/etc/otel-collector-config.yaml
 
   prometheus:
     image: prom/prometheus:latest
@@ -22,7 +22,7 @@ services:
     ports:
       - "9090:9090"     # Prometheus web interface
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./tools/sre/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     depends_on:
       - otel-collector
 
@@ -35,7 +35,7 @@ services:
     networks:
       - dev
     volumes:
-      - "./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml"
+      - "./tools/sre/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml"
       - alertmanager-data:/data
     command: --config.file=/etc/alertmanager/alertmanager.yml --log.level=debug
 
@@ -103,8 +103,8 @@ services:
     # command: >
     #   sh -c "/usr/local/bin/docker-entrypoint -Xms256m -Xmx256m"
     volumes:
-      - ./logstash/logstash_config.conf:/usr/share/logstash/config/logstash.yml
-      - ./logstash/logstash_pipeline.conf/:/usr/share/logstash/pipeline/pipeline.conf  # Pipeline configurations
+      - ./tools/sre/logstash/logstash_config.conf:/usr/share/logstash/config/logstash.yml
+      - ./tools/sre/logstash/logstash_pipeline.conf/:/usr/share/logstash/pipeline/pipeline.conf  # Pipeline configurations
     depends_on:
       - elasticsearch
 
@@ -133,8 +133,8 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=grafana  # Set the admin password
     volumes:
       - grafana-data:/var/lib/grafana
-      - ./grafana/datasources:/etc/grafana/provisioning/datasources
-      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./tools/sre/grafana/datasources:/etc/grafana/provisioning/datasources
+      - ./tools/sre/grafana/dashboards:/etc/grafana/provisioning/dashboards
     networks:
       - dev
     depends_on:
@@ -170,7 +170,7 @@ services:
     restart: always
     build:
       context: .
-      dockerfile: ./tools/mlflow/Dockerfile
+      dockerfile: ./tools/mlops/mlflow/Dockerfile
     image: mlflow/mlflow:latest  # Use the custom image name here
     container_name: mlflow
     depends_on:
