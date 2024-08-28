@@ -5,8 +5,8 @@ FROM python:3.10-slim
 WORKDIR /api
 
 # Copy the current directory contents into the container at /api
-COPY ./src/api/v1/aiden.py /api
-COPY requirements.txt /api
+COPY ./src/api/v1/aiden/aiden.py /api
+COPY ./src/api/v1/aiden/requirements.txt /api
 
 # Install any dependencies
 RUN pip install --no-cache-dir -r requirements.txt

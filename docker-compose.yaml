@@ -155,26 +155,13 @@ services:
   api:
     build:
       context: .
-      dockerfile: ./Dockerfiles/Dockerfile_AIden
+      dockerfile: ./src/api/v1/aiden/Dockerfile
     image: aiden/api:latest  # Use the custom image name here
     container_name: aiden-api
     networks:
       - dev
     ports:
       - "8000:8000"
-    depends_on:
-      - otel-collector
-  
-  llm-api:
-    build:
-      context: .
-      dockerfile: ./Dockerfiles/Dockerfile_LLM
-    image: aiden/experimental-llm-api:latest  # Use the custom image name here
-    container_name: aiden-experimental-llm-api
-    networks:
-      - dev
-    ports:
-      - "8001:8001"
     depends_on:
       - otel-collector
 
