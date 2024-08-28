@@ -2,7 +2,7 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from src.api.v1.aiden import api  # Adjust import based on the package location
+from api.v1.aiden import api  # Adjust based on where `api` is defined
 
 # Create a TestClient instance
 client = TestClient(api)
