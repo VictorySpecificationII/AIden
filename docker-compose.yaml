@@ -170,7 +170,7 @@ services:
     restart: always
     build:
       context: .
-      dockerfile: ./Dockerfiles/Dockerfile_MLFlow
+      dockerfile: ./tools/mlflow/Dockerfile
     image: mlflow/mlflow:latest  # Use the custom image name here
     container_name: mlflow
     depends_on:
