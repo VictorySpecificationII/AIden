@@ -1,33 +1,36 @@
 import logging
-from fastapi import FastAPI, Request
+import os
+from fastapi import FastAPI, Request, HTTPException
 from contextlib import asynccontextmanager
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.sdk.resources import Resource
-
-from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter # use for metrics
-from opentelemetry.metrics import Counter, Histogram, ObservableGauge
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+from opentelemetry.metrics import Observation
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry import metrics
-from opentelemetry.metrics import Observation, CallbackOptions
-
 import psutil
 import time
 import random
-from starlette.exceptions import HTTPException
 import asyncio
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+import torch
+import requests
+import httpx
+from pydantic import BaseModel
 
 api = FastAPI()
 
+# Ensure Hugging Face token is set
+HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_HUB_TOKEN')
 
 def configure_opentelemetry():
     resource = Resource.create({"service.name": "aiden-api"})
@@ -74,7 +77,6 @@ def get_ram_usage_callback(_):
 cpu_gauge = meter.create_observable_gauge(callbacks=[get_cpu_usage_callback], name="aiden_cpu_percent", description="per-cpu usage", unit="1")
 ram_gauge = meter.create_observable_gauge(callbacks=[get_ram_usage_callback], name="aiden_ram_percent", description="RAM memory usage", unit="1")
 
-
 # Instrument the FastAPI app for tracing
 FastAPIInstrumentor.instrument_app(api)
 
@@ -119,6 +121,101 @@ async def simulate_latency():
 @api.get("/error")
 async def trigger_error():
     raise HTTPException(status_code=500, detail="This is a test error")
+
+class ModelDownloadRequest(BaseModel):
+    model_name: str
+
+@api.get("/auth")
+async def authenticate_huggingface():
+    if not HUGGINGFACE_API_KEY:
+        raise HTTPException(status_code=400, detail="Hugging Face API key not set")
+
+    try:
+        response = requests.get(
+            "https://huggingface.co/api/whoami-v2",
+            headers={"Authorization": f"Bearer {HUGGINGFACE_API_KEY}"}
+        )
+        if response.status_code == 200:
+            return {"message": "Authentication successful"}
+        else:
+            raise HTTPException(status_code=response.status_code, detail="Authentication failed")
+    except requests.RequestException as e:
+        logging.error("Error during Hugging Face authentication: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to authenticate with Hugging Face Hub: {str(e)}")
+
+@api.post("/download-model")
+def download_model(request: ModelDownloadRequest):
+    if not HUGGINGFACE_API_KEY:
+        raise HTTPException(status_code=400, detail="Hugging Face API key not set")
+    
+    model_name = request.model_name
+    
+    # Validate the model name
+    if model_name != "meta-llama/Meta-Llama-3-8B":
+        raise HTTPException(status_code=400, detail="Invalid model name")
+
+    try:
+        # Download the model and tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(model_name, use_auth_token=HUGGINGFACE_API_KEY)
+        model = AutoModelForCausalLM.from_pretrained(model_name, use_auth_token=HUGGINGFACE_API_KEY)
+
+        # Save the model and tokenizer to local storage
+        model_path = f"./{model_name.replace('/', '_')}"
+        model.save_pretrained(model_path)
+        tokenizer.save_pretrained(model_path)
+
+        return {"message": "Model downloaded successfully"}
+    except Exception as e:
+        logging.error("Error during model download: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to download model: {str(e)}")
+
+
+
+# @api.get("/download")
+# async def download_model():
+#     model_name = "meta-llama/Meta-Llama-3-8B"
+#     try:
+#         logging.debug("Starting download of model: %s", model_name)
+        
+#         # Download and save model
+#         model_dir = "./models/" + model_name.split("/")[-1]
+#         os.makedirs(model_dir, exist_ok=True)
+        
+#         # Download and cache the model
+#         model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir="./models")
+#         tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir="./models")
+        
+#         # Save the model and tokenizer
+#         model.save_pretrained(model_dir)
+#         tokenizer.save_pretrained(model_dir)
+
+#         logging.debug("Model downloaded and saved successfully.")
+#         return {"message": "Model downloaded and saved successfully"}
+#     except Exception as e:
+#         logging.error("Error downloading the model: %s", e)
+#         raise HTTPException(status_code=500, detail=f"Failed to download the model: {str(e)}")
+
+# @api.get("/generate")
+# async def generate_data(prompt: str):
+#     try:
+#         logging.debug("Generate endpoint hit with prompt: %s", prompt)
+        
+#         model_dir = "./models/meta-llama-Meta-Llama-3-8B"
+#         if not os.path.exists(model_dir):
+#             raise HTTPException(status_code=500, detail="Model not found. Please download the model first.")
+
+#         # Load the model and tokenizer from the saved directory
+#         model = AutoModelForCausalLM.from_pretrained(model_dir)
+#         tokenizer = AutoTokenizer.from_pretrained(model_dir)
+        
+#         generator = pipeline("text-generation", model=model, tokenizer=tokenizer, device=0 if torch.cuda.is_available() else -1)
+#         result = generator(prompt, max_length=50)
+
+#         logging.debug("Generated response: %s", result)
+#         return {"message": "Data generated successfully", "generated_text": result[0]['generated_text']}
+#     except Exception as e:
+#         logging.error("Error generating data: %s", e)
+#         raise HTTPException(status_code=500, detail=f"Failed to generate data: {str(e)}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
