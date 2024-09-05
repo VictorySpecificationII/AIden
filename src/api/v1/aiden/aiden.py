@@ -165,11 +165,15 @@ def save_model_paths(paths):
 model_paths_file = "model_paths.json"
 model_paths = load_model_paths()
 
-class ModelDownloadRequest(BaseModel):
+class TransformerModelDownloadRequest(BaseModel):
     model_name: str
 
+class GGUFModelDownloadRequest(BaseModel):
+    model_name: str
+    file_name: str
+
 @api.post("/download-model-tf")
-def download_model_tf(request: ModelDownloadRequest):
+def download_model_tf(request: TransformerModelDownloadRequest):
     model_name = request.model_name
 
     if not HUGGINGFACE_API_KEY:
@@ -194,21 +198,22 @@ def download_model_tf(request: ModelDownloadRequest):
         raise HTTPException(status_code=500, detail=f"Failed to download model: {str(e)}")
 
 @api.post("/download-model-hf")
-def download_model_hf(request: ModelDownloadRequest):
+def download_model_hf(request: GGUFModelDownloadRequest):
     model_name = request.model_name
+    model_filename = request.file_name
     
     if not HUGGINGFACE_API_KEY:
         raise HTTPException(status_code=400, detail="Hugging Face API key not set")
 
     try:
-        # Define the model file name for GGUF models
-        if model_name == "TheBloke/Llama-2-7B-Chat-GGUF":
-            ll_model_file = "llama-2-7b-chat.Q4_0.gguf"
-        else:
-            raise HTTPException(status_code=400, detail="Unsupported model for GGUF download")
+        # # Define the model file name for GGUF models
+        # if model_name == "TheBloke/Llama-2-7B-Chat-GGUF":
+        #     ll_model_file = "llama-2-7b-chat.Q4_0.gguf"
+        # else:
+        #     raise HTTPException(status_code=400, detail="Unsupported model for GGUF download")
         
         # Download the model file
-        model_path = hf_hub_download(repo_id=model_name, filename=ll_model_file, token=HUGGINGFACE_API_KEY)
+        model_path = hf_hub_download(repo_id=model_name, filename=model_filename, token=HUGGINGFACE_API_KEY)
 
         model_paths[model_name] = model_path
         save_model_paths(model_paths)
