@@ -131,6 +131,12 @@ async def trigger_error():
 class ModelDownloadRequest(BaseModel):
     model_name: str
 
+class TextGenerationRequest(BaseModel):
+    prompt: str
+    max_length: int = 100  # Optional: you can set default or allow customization
+    num_return_sequences: int = 1  # Optional: allow multiple generations
+
+
 @api.get("/auth", tags=["Authentication"])
 async def authenticate_huggingface():
     if not HUGGINGFACE_API_KEY:
@@ -148,8 +154,6 @@ async def authenticate_huggingface():
     except requests.RequestException as e:
         logging.error("Error during Hugging Face authentication: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to authenticate with Hugging Face Hub: {str(e)}")
-
-
 
 def load_model_paths():
     if os.path.exists(model_paths_file):
@@ -196,6 +200,9 @@ def download_model(request: TransformerModelDownloadRequest):
 
 @api.post("/load-model", tags=["Transformer Models"])
 def load_model(request: ModelDownloadRequest):
+
+    global model, tokenizer  # Declare model and tokenizer as global to modify them
+    
     model_name = request.model_name
 
     if model_name not in model_paths:
@@ -210,6 +217,36 @@ def load_model(request: ModelDownloadRequest):
     except Exception as e:
         logging.error(f"Error loading model {model_name}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to load model: {str(e)}")
+
+@api.post("/generate", tags=["Text Generation"])
+def generate_text(request: TextGenerationRequest):
+    if model is None or tokenizer is None:
+        raise HTTPException(status_code=400, detail="Model is not loaded. Load a model first.")
+    
+    try:
+        input_ids = tokenizer.encode(request.prompt, return_tensors="pt")
+
+        # Generate text using the model
+        outputs = model.generate(
+            input_ids=input_ids,
+            max_length=request.max_length,
+            num_return_sequences=request.num_return_sequences,
+            no_repeat_ngram_size=2,  # Optional: add some customization to generation behavior
+            do_sample=True,  # Enable sampling for more diverse outputs
+            top_k=50,  # Optional: adjust the sampling strategy
+            top_p=0.95  # Optional: adjust the sampling strategy
+        )
+
+        # Decode the generated text
+        generated_texts = [tokenizer.decode(output, skip_special_tokens=True) for output in outputs]
+        
+        return {"generated_texts": generated_texts}
+    
+    except Exception as e:
+        logging.error(f"Error during text generation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate text: {str(e)}")
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
