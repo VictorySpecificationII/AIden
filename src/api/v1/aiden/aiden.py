@@ -214,26 +214,6 @@ def load_model(request: ModelDownloadRequest):
         logging.error(f"Error loading model {model_name}: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to load model: {str(e)}")
 
-@api.post("/download-model-hf", tags=["GGUF Models"])
-def download_model_hf(request: GGUFModelDownloadRequest):
-    model_name = request.model_name
-    model_filename = request.file_name
-    
-    if not HUGGINGFACE_API_KEY:
-        raise HTTPException(status_code=400, detail="Hugging Face API key not set")
-
-    try:
-        # Download the model file
-        model_path = hf_hub_download(repo_id=model_name, filename=model_filename, token=HUGGINGFACE_API_KEY)
-
-        model_paths[model_name] = model_path
-        save_model_paths(model_paths)
-
-        return {"message": f"Model downloaded successfully to {model_path}"}
-    except Exception as e:
-        logging.error(f"Error during model download: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to download model: {str(e)}")
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logging.debug("Starting up...")
