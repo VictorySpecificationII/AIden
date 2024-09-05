@@ -1,33 +1,42 @@
 import logging
-from fastapi import FastAPI, Request
+import os
+from fastapi import FastAPI, Request, HTTPException
 from contextlib import asynccontextmanager
 from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-from opentelemetry.instrumentation.asgi import OpenTelemetryMiddleware
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.sdk.resources import Resource
-
-from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter # use for metrics
-from opentelemetry.metrics import Counter, Histogram, ObservableGauge
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+from opentelemetry.metrics import Observation
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry import metrics
-from opentelemetry.metrics import Observation, CallbackOptions
-
 import psutil
 import time
 import random
-from starlette.exceptions import HTTPException
 import asyncio
+from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
+import torch
+import requests
+import httpx
+from pydantic import BaseModel
+from huggingface_hub import hf_hub_download
+import json
 
 api = FastAPI()
 
+# Ensure Hugging Face token is set
+HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_HUB_TOKEN')
+
+# Initialize global variables for model and tokenizer
+tokenizer = None
+model = None
 
 def configure_opentelemetry():
     resource = Resource.create({"service.name": "aiden-api"})
@@ -74,7 +83,6 @@ def get_ram_usage_callback(_):
 cpu_gauge = meter.create_observable_gauge(callbacks=[get_cpu_usage_callback], name="aiden_cpu_percent", description="per-cpu usage", unit="1")
 ram_gauge = meter.create_observable_gauge(callbacks=[get_ram_usage_callback], name="aiden_ram_percent", description="RAM memory usage", unit="1")
 
-
 # Instrument the FastAPI app for tracing
 FastAPIInstrumentor.instrument_app(api)
 
@@ -119,6 +127,126 @@ async def simulate_latency():
 @api.get("/error")
 async def trigger_error():
     raise HTTPException(status_code=500, detail="This is a test error")
+
+class ModelDownloadRequest(BaseModel):
+    model_name: str
+
+class TextGenerationRequest(BaseModel):
+    prompt: str
+    max_length: int = 100  # Optional: you can set default or allow customization
+    num_return_sequences: int = 1  # Optional: allow multiple generations
+
+
+@api.get("/auth", tags=["Authentication"])
+async def authenticate_huggingface():
+    if not HUGGINGFACE_API_KEY:
+        raise HTTPException(status_code=400, detail="Hugging Face API key not set")
+
+    try:
+        response = requests.get(
+            "https://huggingface.co/api/whoami-v2",
+            headers={"Authorization": f"Bearer {HUGGINGFACE_API_KEY}"}
+        )
+        if response.status_code == 200:
+            return {"message": "Authentication successful"}
+        else:
+            raise HTTPException(status_code=response.status_code, detail="Authentication failed")
+    except requests.RequestException as e:
+        logging.error("Error during Hugging Face authentication: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to authenticate with Hugging Face Hub: {str(e)}")
+
+def load_model_paths():
+    if os.path.exists(model_paths_file):
+        with open(model_paths_file, "r") as file:
+            return json.load(file)
+    return {}
+
+def save_model_paths(paths):
+    with open(model_paths_file, "w") as file:
+        json.dump(paths, file)
+
+# Model paths storage
+model_paths_file = "model_paths.json"
+model_paths = load_model_paths()
+
+class TransformerModelDownloadRequest(BaseModel):
+    model_name: str
+
+@api.post("/download-model", tags=["Transformer Models"])
+def download_model(request: TransformerModelDownloadRequest):
+    model_name = request.model_name
+
+    if not HUGGINGFACE_API_KEY:
+        raise HTTPException(status_code=400, detail="Hugging Face API key not set")
+
+    try:
+        # Download the model and tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(model_name, use_auth_token=HUGGINGFACE_API_KEY)
+        model = AutoModelForCausalLM.from_pretrained(model_name, use_auth_token=HUGGINGFACE_API_KEY)
+
+        # Save the model and tokenizer to local storage
+        #model_path = f"./models/{model_name.replace('/', '_')}" # sanitized
+        model_path = f"./models/{model_name}" # unsanitized
+        model.save_pretrained(model_path)
+        tokenizer.save_pretrained(model_path)
+
+        model_paths[model_name] = model_path
+        save_model_paths(model_paths)
+
+        return {"message": "Model downloaded successfully", "model_path": model_path}
+    except Exception as e:
+        logging.error("Error during model download: %s", e)
+        raise HTTPException(status_code=500, detail=f"Failed to download model: {str(e)}")
+
+@api.post("/load-model", tags=["Transformer Models"])
+def load_model(request: ModelDownloadRequest):
+
+    global model, tokenizer  # Declare model and tokenizer as global to modify them
+    
+    model_name = request.model_name
+
+    if model_name not in model_paths:
+        raise HTTPException(status_code=400, detail="Model not downloaded. Call /download-model first.")
+
+    model_path = model_paths[model_name]
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        model = AutoModelForCausalLM.from_pretrained(model_path)
+
+        return {"message": f"Model {model_name} loaded successfully from {model_path}"}
+    except Exception as e:
+        logging.error(f"Error loading model {model_name}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load model: {str(e)}")
+
+@api.post("/generate", tags=["Text Generation"])
+def generate_text(request: TextGenerationRequest):
+    if model is None or tokenizer is None:
+        raise HTTPException(status_code=400, detail="Model is not loaded. Load a model first.")
+    
+    try:
+        input_ids = tokenizer.encode(request.prompt, return_tensors="pt")
+
+        # Generate text using the model
+        outputs = model.generate(
+            input_ids=input_ids,
+            max_length=request.max_length,
+            num_return_sequences=request.num_return_sequences,
+            no_repeat_ngram_size=2,  # Optional: add some customization to generation behavior
+            do_sample=True,  # Enable sampling for more diverse outputs
+            top_k=50,  # Optional: adjust the sampling strategy
+            top_p=0.95  # Optional: adjust the sampling strategy
+        )
+
+        # Decode the generated text
+        generated_texts = [tokenizer.decode(output, skip_special_tokens=True) for output in outputs]
+        
+        return {"generated_texts": generated_texts}
+    
+    except Exception as e:
+        logging.error(f"Error during text generation: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to generate text: {str(e)}")
+
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
