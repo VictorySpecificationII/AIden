@@ -1,17 +1,48 @@
 # AIden
 
-Copilot, akin to Jarvis from Iron Man. A project inspired long before the GPT days. Uses OpenTelemetry for vendor-agnostic telemetry, forwarding (at the moment) logs and traces to a collector.
+Copilot, akin to Jarvis from Iron Man. A project inspired long before the GPT days. Uses OpenTelemetry for vendor-agnostic telemetry, forwarding metrics, logs, traces and spans to a collector.
+
+## Test
+
+To run the pytest suite, navigate to the root directory of the project and run 
+
+```bash
+pytest
+```
+
+## Linting
+
+The linter used here is pylint, to run just execute
+
+```bash
+pylint <path-to-file.py>
+```
 
 ## Setup
 
 ### Create Python Virtual Environment
 
 ```bash
-cd AIden
+cd src/api/v1/aiden
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+### Register Access Token on HuggingFace
+
+ - Register an access token on HuggingFace hub.
+ - Copy access token, create a .env file and add the following inside:
+ ```bash
+ export HUGGINGFACE_HUB_TOKEN=
+ ```
+ - Add your key after the = sign, no spaces
+ - Run 
+ ```bash 
+ source .env
+ ```
+
+ Should you wish to work with a gated model, now you can.
 
 ## Usage
 
@@ -32,7 +63,7 @@ docker logs -f otel-collector
 #### Run API
 
 ```bash
-cd src/api/v1
+cd src/api/v1/aiden
 uvicorn aiden:api --reload
 ```
 
