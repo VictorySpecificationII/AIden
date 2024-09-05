@@ -168,10 +168,6 @@ model_paths = load_model_paths()
 class TransformerModelDownloadRequest(BaseModel):
     model_name: str
 
-class GGUFModelDownloadRequest(BaseModel):
-    model_name: str
-    file_name: str
-
 @api.post("/download-model-tf", tags=["Transformer Models"])
 def download_model_tf(request: TransformerModelDownloadRequest):
     model_name = request.model_name
