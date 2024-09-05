@@ -168,8 +168,8 @@ model_paths = load_model_paths()
 class TransformerModelDownloadRequest(BaseModel):
     model_name: str
 
-@api.post("/download-model-tf", tags=["Transformer Models"])
-def download_model_tf(request: TransformerModelDownloadRequest):
+@api.post("/download-model", tags=["Transformer Models"])
+def download_model(request: TransformerModelDownloadRequest):
     model_name = request.model_name
 
     if not HUGGINGFACE_API_KEY:
