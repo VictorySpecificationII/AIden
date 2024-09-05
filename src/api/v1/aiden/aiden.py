@@ -26,11 +26,17 @@ import torch
 import requests
 import httpx
 from pydantic import BaseModel
+from huggingface_hub import hf_hub_download
+import json
 
 api = FastAPI()
 
 # Ensure Hugging Face token is set
 HUGGINGFACE_API_KEY = os.getenv('HUGGINGFACE_HUB_TOKEN')
+
+# Initialize global variables for model and tokenizer
+tokenizer = None
+model = None
 
 def configure_opentelemetry():
     resource = Resource.create({"service.name": "aiden-api"})
@@ -143,16 +149,31 @@ async def authenticate_huggingface():
         logging.error("Error during Hugging Face authentication: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to authenticate with Hugging Face Hub: {str(e)}")
 
-@api.post("/download-model")
-def download_model(request: ModelDownloadRequest):
+
+
+def load_model_paths():
+    if os.path.exists(model_paths_file):
+        with open(model_paths_file, "r") as file:
+            return json.load(file)
+    return {}
+
+def save_model_paths(paths):
+    with open(model_paths_file, "w") as file:
+        json.dump(paths, file)
+
+# Model paths storage
+model_paths_file = "model_paths.json"
+model_paths = load_model_paths()
+
+class ModelDownloadRequest(BaseModel):
+    model_name: str
+
+@api.post("/download-model-tf")
+def download_model_tf(request: ModelDownloadRequest):
+    model_name = request.model_name
+
     if not HUGGINGFACE_API_KEY:
         raise HTTPException(status_code=400, detail="Hugging Face API key not set")
-    
-    model_name = request.model_name
-    
-    # Validate the model name
-    if model_name != "meta-llama/Meta-Llama-3-8B":
-        raise HTTPException(status_code=400, detail="Invalid model name")
 
     try:
         # Download the model and tokenizer
@@ -160,62 +181,66 @@ def download_model(request: ModelDownloadRequest):
         model = AutoModelForCausalLM.from_pretrained(model_name, use_auth_token=HUGGINGFACE_API_KEY)
 
         # Save the model and tokenizer to local storage
-        model_path = f"./{model_name.replace('/', '_')}"
+        model_path = f"./models/{model_name.replace('/', '_')}"
         model.save_pretrained(model_path)
         tokenizer.save_pretrained(model_path)
 
-        return {"message": "Model downloaded successfully"}
+        model_paths[model_name] = model_path
+        save_model_paths(model_paths)
+
+        return {"message": "Model downloaded successfully", "model_path": model_path}
     except Exception as e:
         logging.error("Error during model download: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to download model: {str(e)}")
 
+@api.post("/download-model-hf")
+def download_model_hf(request: ModelDownloadRequest):
+    model_name = request.model_name
+    
+    if not HUGGINGFACE_API_KEY:
+        raise HTTPException(status_code=400, detail="Hugging Face API key not set")
 
-
-# @api.get("/download")
-# async def download_model():
-#     model_name = "meta-llama/Meta-Llama-3-8B"
-#     try:
-#         logging.debug("Starting download of model: %s", model_name)
+    try:
+        # Define the model file name for GGUF models
+        if model_name == "TheBloke/Llama-2-7B-Chat-GGUF":
+            ll_model_file = "llama-2-7b-chat.Q4_0.gguf"
+        else:
+            raise HTTPException(status_code=400, detail="Unsupported model for GGUF download")
         
-#         # Download and save model
-#         model_dir = "./models/" + model_name.split("/")[-1]
-#         os.makedirs(model_dir, exist_ok=True)
-        
-#         # Download and cache the model
-#         model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir="./models")
-#         tokenizer = AutoTokenizer.from_pretrained(model_name, cache_dir="./models")
-        
-#         # Save the model and tokenizer
-#         model.save_pretrained(model_dir)
-#         tokenizer.save_pretrained(model_dir)
+        # Download the model file
+        model_path = hf_hub_download(repo_id=model_name, filename=ll_model_file, token=HUGGINGFACE_API_KEY)
 
-#         logging.debug("Model downloaded and saved successfully.")
-#         return {"message": "Model downloaded and saved successfully"}
-#     except Exception as e:
-#         logging.error("Error downloading the model: %s", e)
-#         raise HTTPException(status_code=500, detail=f"Failed to download the model: {str(e)}")
+        model_paths[model_name] = model_path
+        save_model_paths(model_paths)
 
-# @api.get("/generate")
-# async def generate_data(prompt: str):
-#     try:
-#         logging.debug("Generate endpoint hit with prompt: %s", prompt)
-        
-#         model_dir = "./models/meta-llama-Meta-Llama-3-8B"
-#         if not os.path.exists(model_dir):
-#             raise HTTPException(status_code=500, detail="Model not found. Please download the model first.")
+        return {"message": f"Model downloaded successfully to {model_path}"}
+    except Exception as e:
+        logging.error(f"Error during model download: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to download model: {str(e)}")
 
-#         # Load the model and tokenizer from the saved directory
-#         model = AutoModelForCausalLM.from_pretrained(model_dir)
-#         tokenizer = AutoTokenizer.from_pretrained(model_dir)
-        
-#         generator = pipeline("text-generation", model=model, tokenizer=tokenizer, device=0 if torch.cuda.is_available() else -1)
-#         result = generator(prompt, max_length=50)
+@api.post("/load-model")
+def load_model(request: ModelDownloadRequest):
+    model_name = request.model_name
 
-#         logging.debug("Generated response: %s", result)
-#         return {"message": "Data generated successfully", "generated_text": result[0]['generated_text']}
-#     except Exception as e:
-#         logging.error("Error generating data: %s", e)
-#         raise HTTPException(status_code=500, detail=f"Failed to generate data: {str(e)}")
+    if model_name not in model_paths:
+        raise HTTPException(status_code=400, detail="Model not downloaded. Call /download-model first.")
+
+    model_path = model_paths[model_name]
+    try:
+        # Load the model based on its type
+        if model_name.startswith("TheBloke/"):
+            # Handle GGUF models
+            # Load GGUF models if necessary, e.g., using a custom loader
+            pass
+        else:
+            # Handle transformer models
+            tokenizer = AutoTokenizer.from_pretrained(model_path)
+            model = AutoModelForCausalLM.from_pretrained(model_path)
+
+        return {"message": f"Model {model_name} loaded successfully from {model_path}"}
+    except Exception as e:
+        logging.error(f"Error loading model {model_name}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load model: {str(e)}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
