@@ -131,7 +131,7 @@ async def trigger_error():
 class ModelDownloadRequest(BaseModel):
     model_name: str
 
-@api.get("/auth")
+@api.get("/auth", tags=["Authentication"])
 async def authenticate_huggingface():
     if not HUGGINGFACE_API_KEY:
         raise HTTPException(status_code=400, detail="Hugging Face API key not set")
@@ -172,7 +172,7 @@ class GGUFModelDownloadRequest(BaseModel):
     model_name: str
     file_name: str
 
-@api.post("/download-model-tf")
+@api.post("/download-model-tf", tags=["Transformer Models"])
 def download_model_tf(request: TransformerModelDownloadRequest):
     model_name = request.model_name
 
@@ -197,7 +197,24 @@ def download_model_tf(request: TransformerModelDownloadRequest):
         logging.error("Error during model download: %s", e)
         raise HTTPException(status_code=500, detail=f"Failed to download model: {str(e)}")
 
-@api.post("/download-model-hf")
+@api.post("/load-model", tags=["Transformer Models"])
+def load_model(request: ModelDownloadRequest):
+    model_name = request.model_name
+
+    if model_name not in model_paths:
+        raise HTTPException(status_code=400, detail="Model not downloaded. Call /download-model first.")
+
+    model_path = model_paths[model_name]
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_path)
+        model = AutoModelForCausalLM.from_pretrained(model_path)
+
+        return {"message": f"Model {model_name} loaded successfully from {model_path}"}
+    except Exception as e:
+        logging.error(f"Error loading model {model_name}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to load model: {str(e)}")
+
+@api.post("/download-model-hf", tags=["GGUF Models"])
 def download_model_hf(request: GGUFModelDownloadRequest):
     model_name = request.model_name
     model_filename = request.file_name
@@ -206,12 +223,6 @@ def download_model_hf(request: GGUFModelDownloadRequest):
         raise HTTPException(status_code=400, detail="Hugging Face API key not set")
 
     try:
-        # # Define the model file name for GGUF models
-        # if model_name == "TheBloke/Llama-2-7B-Chat-GGUF":
-        #     ll_model_file = "llama-2-7b-chat.Q4_0.gguf"
-        # else:
-        #     raise HTTPException(status_code=400, detail="Unsupported model for GGUF download")
-        
         # Download the model file
         model_path = hf_hub_download(repo_id=model_name, filename=model_filename, token=HUGGINGFACE_API_KEY)
 
@@ -222,30 +233,6 @@ def download_model_hf(request: GGUFModelDownloadRequest):
     except Exception as e:
         logging.error(f"Error during model download: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to download model: {str(e)}")
-
-@api.post("/load-model")
-def load_model(request: ModelDownloadRequest):
-    model_name = request.model_name
-
-    if model_name not in model_paths:
-        raise HTTPException(status_code=400, detail="Model not downloaded. Call /download-model first.")
-
-    model_path = model_paths[model_name]
-    try:
-        # Load the model based on its type
-        if model_name.startswith("TheBloke/"):
-            # Handle GGUF models
-            # Load GGUF models if necessary, e.g., using a custom loader
-            pass
-        else:
-            # Handle transformer models
-            tokenizer = AutoTokenizer.from_pretrained(model_path)
-            model = AutoModelForCausalLM.from_pretrained(model_path)
-
-        return {"message": f"Model {model_name} loaded successfully from {model_path}"}
-    except Exception as e:
-        logging.error(f"Error loading model {model_name}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to load model: {str(e)}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
