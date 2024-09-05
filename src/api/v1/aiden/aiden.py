@@ -181,7 +181,8 @@ def download_model(request: TransformerModelDownloadRequest):
         model = AutoModelForCausalLM.from_pretrained(model_name, use_auth_token=HUGGINGFACE_API_KEY)
 
         # Save the model and tokenizer to local storage
-        model_path = f"./models/{model_name.replace('/', '_')}"
+        #model_path = f"./models/{model_name.replace('/', '_')}" # sanitized
+        model_path = f"./models/{model_name}" # unsanitized
         model.save_pretrained(model_path)
         tokenizer.save_pretrained(model_path)
 
