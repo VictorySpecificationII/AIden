@@ -16,9 +16,25 @@ from llama_index.llms.llama_cpp.llama_utils import (
 )
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
+def print_banner():
+    """
+    Prints a banner at startup.
+    """
+
+    ascii_art = """
+            _    ___    _            
+           / \  |_ _|__| | ___ _ __  
+          / _ \  | |/ _` |/ _ \ '_ \ 
+         / ___ \ | | (_| |  __/ | | |
+        /_/   \_\___\__,_|\___|_| |_|
+        
+    Artificial Intelligence Co-Pilot
+        """
+    print(ascii_art)
+
 # Initialize FastAPI apilication
 api = FastAPI()
-
+print_banner()
 # Initialize telemetry
 meter = telemetry.configure_telemetry(service_name="aiden-api")
 latency_histogram, request_counter, error_counter = telemetry.create_metrics(meter)
