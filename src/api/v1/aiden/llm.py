@@ -4,6 +4,13 @@ from llama_index.llms.llama_cpp.llama_utils import (
     messages_to_prompt,
     completion_to_prompt,
 )
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
+# # loads BAAI/bge-small-en-v1.5
+# local_embedding_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+
+# data = SimpleDirectoryReader(input_dir="./data/paul_graham/").load_data()
+# index = VectorStoreIndex.from_documents(data, embed_model = local_embedding_model, show_progress = True)
 
 model_url = "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q2_K.gguf"
 
@@ -27,9 +34,9 @@ llm = LlamaCPP(
     verbose=True,
 )
 
-response = llm.complete("Hello! Can you tell me a poem about cats and dogs?")
-print(response.text)
+# response = llm.complete("Hello! Can you tell me a poem about cats and dogs?")
+# print(response.text)
 
-response_iter = llm.stream_complete("Can you write me a poem about fast cars?")
+response_iter = llm.stream_complete("What is the meaning of life?")
 for response in response_iter:
     print(response.delta, end="", flush=True)
