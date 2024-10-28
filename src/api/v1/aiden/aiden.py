@@ -32,8 +32,15 @@ def print_banner():
         """
     print(ascii_art)
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("start")
+    yield
+    print("stop")
+
 # Initialize FastAPI apilication
-api = FastAPI()
+api = FastAPI(lifespan=lifespan)
 print_banner()
 # Initialize telemetry
 meter = telemetry.configure_telemetry(service_name="aiden-api")
