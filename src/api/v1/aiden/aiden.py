@@ -107,3 +107,4 @@ async def generate():
     #     print(response.delta, end="", flush=True)
     print("done")
     return "ok"
+    #return response
