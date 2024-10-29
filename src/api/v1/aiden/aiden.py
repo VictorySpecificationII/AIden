@@ -76,13 +76,16 @@ async def telemetry_middleware(request: Request, call_next):
 async def root():
     return {"message": "Welcome to Aiden's API server."}
 
+@api.get("/embedding")
+async def embed():
+    # loads BAAI/bge-small-en-v1.5
+    local_embedding_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
+
+    data = SimpleDirectoryReader(input_dir="./data/paul_graham/").load_data()
+    index = VectorStoreIndex.from_documents(data, embed_model = local_embedding_model, show_progress = True)
+
 @api.get("/generate")
 async def generate():
-    # # loads BAAI/bge-small-en-v1.5
-    # local_embedding_model = HuggingFaceEmbedding(model_name="BAAI/bge-small-en-v1.5")
-
-    # data = SimpleDirectoryReader(input_dir="./data/paul_graham/").load_data()
-    # index = VectorStoreIndex.from_documents(data, embed_model = local_embedding_model, show_progress = True)
 
     model_url = "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q2_K.gguf"
 
