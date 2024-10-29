@@ -43,16 +43,18 @@ async def lifespan(app: FastAPI):
 # Initialize FastAPI apilication
 api = FastAPI(lifespan=lifespan)
 # Initialize telemetry
-meter = telemetry.configure_telemetry(service_name="aiden-api")
+telemetry_setup = telemetry.configure_telemetry(service_name="aiden-api")
+meter = telemetry_setup["meter"]
+logger = telemetry_setup["logger"]
+tracer = telemetry_setup["tracer"]
 latency_histogram, request_counter, error_counter = telemetry.create_metrics(meter)
+
 
 # Instrument the FastAPI api for tracing
 FastAPIInstrumentor.instrument_app(api)
 
 @api.middleware("http")
 async def telemetry_middleware(request: Request, call_next):
-    tracer = trace.get_tracer(__name__)
-    logger = logging.getLogger(__name__)
     start_time = time.time()
 
     with tracer.start_as_current_span("http_request"):

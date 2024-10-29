@@ -42,8 +42,12 @@ def configure_telemetry(service_name: str = "fastapi-service"):
     meter_provider = MeterProvider(metric_readers=[metric_reader], resource=resource)
     metrics.set_meter_provider(meter_provider)
 
-    # Return configured meter
-    return metrics.get_meter(service_name)
+    # Return configured logger, meter, and tracer
+    return {
+        "logger": logging.getLogger(),
+        "meter": metrics.get_meter(service_name),
+        "tracer": trace.get_tracer_provider().get_tracer(service_name),
+    }
 
 def create_metrics(meter):
     # Create telemetry instruments
