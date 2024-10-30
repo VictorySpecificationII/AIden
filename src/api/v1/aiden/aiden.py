@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from opentelemetry import trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 import telemetry
+import boot_process
 
 # llm stuff
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
@@ -16,29 +17,15 @@ from llama_index.llms.llama_cpp.llama_utils import (
 )
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
-def print_banner():
-    """
-    Prints a banner at startup.
-    """
 
-    ascii_art = """
-            _    ___    _            
-           / \  |_ _|__| | ___ _ __  
-          / _ \  | |/ _` |/ _ \ '_ \ 
-         / ___ \ | | (_| |  __/ | | |
-        /_/   \_\___\__,_|\___|_| |_|
-        
-    Artificial Intelligence Co-Pilot
-        """
-    print(ascii_art)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("start")
-    print_banner()
+    boot_process.print_banner()
+    boot_process.boot_checks()
     yield
-    print("stop")
+    # Shutdown logic
 
 # Initialize FastAPI apilication
 api = FastAPI(lifespan=lifespan)
@@ -89,8 +76,10 @@ async def root():
 # @api.get("/generate")
 # async def generate():
 
-#     model_url = "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q2_K.gguf"
 
+#     model_url = "https://huggingface.co/TheBloke/Llama-2-7B-Chat-GGUF/resolve/main/llama-2-7b-chat.Q2_K.gguf"
+#     model_url = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q8_0.gguf"
+#     model_url = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q2_K.gguf"
 #     llm = LlamaCPP(
 #         # You can pass in the URL to a GGML model to download it automatically
 #         model_url=model_url,
