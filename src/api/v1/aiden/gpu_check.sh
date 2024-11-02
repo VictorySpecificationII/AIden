@@ -2,10 +2,7 @@
 
 # Function to check if a GPU is integrated or discrete
 is_discrete_gpu() {
-    # Check for specific vendor IDs known to indicate discrete GPUs
     local vendor_id="$1"
-    
-    # Remove the 0x prefix if it exists
     vendor_id=${vendor_id#0x}
     
     echo "Checking vendor ID: $vendor_id"  # Debug statement
@@ -23,6 +20,7 @@ is_discrete_gpu() {
 collect_gpu_info() {
     local gpu_id="$1"
     local device_path="/sys/bus/pci/devices/$gpu_id"
+    local drm_device_path="/sys/class/drm/card1"  # Assuming card1; adapt based on your setup
 
     if [ ! -d "$device_path" ]; then
         echo "Device path $device_path does not exist."
@@ -40,9 +38,19 @@ collect_gpu_info() {
         echo "  Device ID: $device"
         echo "  Subsystem Vendor ID: $(cat "$device_path/subsystem_vendor" 2>/dev/null || echo 'N/A')"
         echo "  Subsystem Device ID: $(cat "$device_path/subsystem_device" 2>/dev/null || echo 'N/A')"
-        
+
+        # Additional information from drm directory
+        if [ -d "$drm_device_path" ]; then
+            echo "  Additional Information from /sys/class/drm:"
+            echo "    Max Frequency: $(cat $drm_device_path/device/gt_max_freq_mhz 2>/dev/null || echo 'N/A') MHz"
+            echo "    Current Frequency: $(cat $drm_device_path/device/gt_cur_freq_mhz 2>/dev/null || echo 'N/A') MHz"
+            echo "    Min Frequency: $(cat $drm_device_path/device/gt_min_freq_mhz 2>/dev/null || echo 'N/A') MHz"
+        else
+            echo "  No DRM information found."
+        fi
+
         # Loop through each file in the device path and print relevant info
-        echo "  Additional Information:"
+        echo "  Additional Information from PCI device path:"
         for file in "$device_path"/*; do
             if [[ -f "$file" ]]; then
                 filename=$(basename "$file")
@@ -54,6 +62,11 @@ collect_gpu_info() {
     else
         echo "Integrated GPU found (not reporting): $gpu_id"
     fi
+
+    # Fetch additional information using lspci
+    echo "Fetching additional details using lspci..."
+    sudo lspci -v -s "$gpu_id" | grep -E 'VGA|Memory|Flags|Kernel modules'
+    echo ""
 }
 
 # Find all VGA-compatible GPU IDs
