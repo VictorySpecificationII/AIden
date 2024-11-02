@@ -38,16 +38,23 @@ collect_gpu_info() {
         echo "  Subsystem Vendor ID: $(cat "$device_path/subsystem_vendor" 2>/dev/null || echo 'N/A')"
         echo "  Subsystem Device ID: $(cat "$device_path/subsystem_device" 2>/dev/null || echo 'N/A')"
 
-        # Dynamically determine the DRM device path
-        local card_number=$(echo "$gpu_id" | awk -F: '{ print $2 }' | awk '{ print $1 }')
+        # Dynamically determine the DRM device path without a leading zero
+        local card_number=$(echo "$gpu_id" | awk -F: '{ print $2 }')
+        local drm_device_path="/sys/class/drm/card${card_number}"
+        # Trim leading zero if the card_number is in the format of 0N
+        if [[ $card_number =~ ^0([0-9]+)$ ]]; then
+            card_number="${BASH_REMATCH[1]}"
+        fi
         local drm_device_path="/sys/class/drm/card${card_number}"
 
+        echo "DEBUG"
+        echo "$drm_device_path"
         # Additional information from drm directory
         if [ -d "$drm_device_path" ]; then
             echo "  Additional Information from /sys/class/drm:"
-            echo "    Max Frequency: $(cat $drm_device_path/gt_max_freq_mhz 2>/dev/null || echo 'N/A') MHz"
-            echo "    Current Frequency: $(cat $drm_device_path/gt_cur_freq_mhz 2>/dev/null || echo 'N/A') MHz"
-            echo "    Min Frequency: $(cat $drm_device_path/gt_min_freq_mhz 2>/dev/null || echo 'N/A') MHz"
+            echo "    Max Frequency: $(cat "$drm_device_path/gt_max_freq_mhz" 2>/dev/null || echo 'N/A') MHz"
+            echo "    Current Frequency: $(cat "$drm_device_path/gt_cur_freq_mhz" 2>/dev/null || echo 'N/A') MHz"
+            echo "    Min Frequency: $(cat "$drm_device_path/gt_min_freq_mhz" 2>/dev/null || echo 'N/A') MHz"
         else
             echo "  No DRM information found."
         fi
