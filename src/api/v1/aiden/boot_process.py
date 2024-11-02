@@ -38,20 +38,23 @@ def get_cpu_info():
     cpu_info = run_command("lscpu")
     return format_output(cpu_info)
 
-# def get_gpu_info():
-#     """Get detailed GPU information and format it."""
-#     gpu_info = run_command("lshw -C display")
-#     return format_output(gpu_info)
+def get_gpu_info():
+    # """Get detailed GPU information and format it."""
+    # gpu_info = run_command("lshw -C display")
+    # return format_output(gpu_info)
+    return "no gpu"
 
-# def get_network_info():
-#     """Get detailed network information using `ip` command and format it."""
-#     network_info = run_command("ip addr")
-#     return format_output(network_info)
+def get_network_info():
+    # """Get detailed network information using `ip` command and format it."""
+    # network_info = run_command("ip addr")
+    # return format_output(network_info)
+    return "no net"
 
-# def get_disk_info():
-#     """Get detailed disk information and format it."""
-#     disk_info = run_command("lsblk -o NAME,SIZE,TYPE,MOUNTPOINT")
-#     return format_output(disk_info)
+def get_disk_info():
+    # """Get detailed disk information and format it."""
+    # disk_info = run_command("lsblk -o NAME,SIZE,TYPE,MOUNTPOINT")
+    # return format_output(disk_info)
+    return "no disk"
 
 def format_output(raw_output):
     """Format raw command output into a structured format."""
@@ -68,9 +71,9 @@ def detect_resources():
     """Detects CPU, GPU, network, and disk information."""
     resources = {
         "cpu_info": get_cpu_info(),
-        # "gpu_info": get_gpu_info(),
-        # "network_info": get_network_info(),
-        # "disk_info": get_disk_info(),
+        "gpu_info": get_gpu_info(),
+        "network_info": get_network_info(),
+        "disk_info": get_disk_info(),
     }
     return resources
 
@@ -128,3 +131,5 @@ def boot_checks():
     for key, value in resources.items():
         print(f"{key.replace('_', ' ').title()}:\n{value}\n")
     print(f"Model selected: {model}")
+
+    return model
