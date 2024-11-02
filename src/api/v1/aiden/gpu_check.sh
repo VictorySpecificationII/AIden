@@ -20,7 +20,6 @@ is_discrete_gpu() {
 collect_gpu_info() {
     local gpu_id="$1"
     local device_path="/sys/bus/pci/devices/$gpu_id"
-    local drm_device_path="/sys/class/drm/card1"  # Assuming card1; adapt based on your setup
 
     if [ ! -d "$device_path" ]; then
         echo "Device path $device_path does not exist."
@@ -38,8 +37,11 @@ collect_gpu_info() {
         echo "  Device ID: $device"
         echo "  Subsystem Vendor ID: $(cat "$device_path/subsystem_vendor" 2>/dev/null || echo 'N/A')"
         echo "  Subsystem Device ID: $(cat "$device_path/subsystem_device" 2>/dev/null || echo 'N/A')"
-        echo "DEBUG"
-        echo "$drm_device_path"
+
+        # Dynamically determine the DRM device path
+        local card_number=$(echo "$gpu_id" | awk -F: '{ print $2 }' | awk '{ print $1 }')
+        local drm_device_path="/sys/class/drm/card${card_number}"
+
         # Additional information from drm directory
         if [ -d "$drm_device_path" ]; then
             echo "  Additional Information from /sys/class/drm:"
