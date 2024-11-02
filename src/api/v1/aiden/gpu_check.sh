@@ -38,13 +38,14 @@ collect_gpu_info() {
         echo "  Device ID: $device"
         echo "  Subsystem Vendor ID: $(cat "$device_path/subsystem_vendor" 2>/dev/null || echo 'N/A')"
         echo "  Subsystem Device ID: $(cat "$device_path/subsystem_device" 2>/dev/null || echo 'N/A')"
-
+        echo "DEBUG"
+        echo "$drm_device_path"
         # Additional information from drm directory
         if [ -d "$drm_device_path" ]; then
             echo "  Additional Information from /sys/class/drm:"
-            echo "    Max Frequency: $(cat $drm_device_path/device/gt_max_freq_mhz 2>/dev/null || echo 'N/A') MHz"
-            echo "    Current Frequency: $(cat $drm_device_path/device/gt_cur_freq_mhz 2>/dev/null || echo 'N/A') MHz"
-            echo "    Min Frequency: $(cat $drm_device_path/device/gt_min_freq_mhz 2>/dev/null || echo 'N/A') MHz"
+            echo "    Max Frequency: $(cat $drm_device_path/gt_max_freq_mhz 2>/dev/null || echo 'N/A') MHz"
+            echo "    Current Frequency: $(cat $drm_device_path/gt_cur_freq_mhz 2>/dev/null || echo 'N/A') MHz"
+            echo "    Min Frequency: $(cat $drm_device_path/gt_min_freq_mhz 2>/dev/null || echo 'N/A') MHz"
         else
             echo "  No DRM information found."
         fi
