@@ -5,7 +5,6 @@ def print_banner():
     """
     Prints a banner at startup.
     """
-
     ascii_art = """
             _    ___    _            
            / \  |_ _|__| | ___ _ __  
@@ -16,7 +15,7 @@ def print_banner():
     Artificial Intelligence Co-Pilot
         """
     print(ascii_art)
-    
+
 def run_command(command):
     """Run a shell command and return the output."""
     result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, shell=True)
@@ -39,43 +38,30 @@ def get_cpu_info():
     return format_output(cpu_info)
 
 def get_gpu_info():
-    # """Get detailed GPU information and format it."""
-    # gpu_info = run_command("lshw -C display")
-    # return format_output(gpu_info)
-    return "no gpu"
-
-def get_network_info():
-    # """Get detailed network information using `ip` command and format it."""
-    # network_info = run_command("ip addr")
-    # return format_output(network_info)
-    return "no net"
-
-def get_disk_info():
-    # """Get detailed disk information and format it."""
-    # disk_info = run_command("lsblk -o NAME,SIZE,TYPE,MOUNTPOINT")
-    # return format_output(disk_info)
-    return "no disk"
+    """Get detailed GPU information and format it."""
+    gpu_info = run_command("lshw -C display")
+    return format_output(gpu_info)
 
 def format_output(raw_output):
     """Format raw command output into a structured format."""
     if not raw_output:
         return "No information available."
-
     formatted_lines = []
     for line in raw_output.splitlines():
         formatted_lines.append(line.strip())
-    
     return "\n".join(formatted_lines)
 
 def detect_resources():
     """Detects CPU, GPU, network, and disk information."""
     resources = {
         "cpu_info": get_cpu_info(),
-        "gpu_info": get_gpu_info(),
-        "network_info": get_network_info(),
-        "disk_info": get_disk_info(),
+        "gpu_info": get_gpu_info()
     }
     return resources
+
+def is_nvidia_smi_installed():
+    """Check if `nvidia-smi` is installed."""
+    return run_command("which nvidia-smi") is not None
 
 def decide_model(resources):
     """Decides which model to run based on the detected resources."""
@@ -88,6 +74,10 @@ def decide_model(resources):
         "acceptable_architectures": ["arm", "x86_64"] # Include ARM architectures
     }
     
+    # If `nvidia-smi` isn't installed, use the edge model
+    if not is_nvidia_smi_installed():
+        return "edge_device_model"  # Return specific model for edge devices
+
     # Parse the CPU information to extract necessary values
     if cpu_info:
         # Extract relevant lines from the CPU info
@@ -120,7 +110,6 @@ def decide_model(resources):
     # Default model for non-edge devices
     return "default_model"
 
-
 def boot_checks():
     environment = detect_environment()
     resources = detect_resources()
@@ -133,3 +122,5 @@ def boot_checks():
     print(f"Model selected: {model}")
 
     return model
+
+boot_checks()
