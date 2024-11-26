@@ -122,5 +122,3 @@ def boot_checks():
     print(f"Model selected: {model}")
 
     return model
-
-boot_checks()
