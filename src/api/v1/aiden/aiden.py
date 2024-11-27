@@ -52,3 +52,14 @@ async def telemetry_middleware(request: Request, call_next):
 @app.get("/")
 async def root():
     return {"message": "Welcome to Aiden's API server."}
+
+@app.get("/long-task")
+async def long_task():
+    """
+    Simulate a long-running task that takes 30 seconds to complete.
+    Useful for testing root endpoint responsiveness.
+    """
+    logger.info("Long task started.")
+    await asyncio.sleep(30)  # Simulate a 30-second async operation
+    logger.info("Long task completed.")
+    return {"status": "completed", "message": "Long-running task finished successfully."}
