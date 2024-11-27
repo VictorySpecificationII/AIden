@@ -20,7 +20,6 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    boot_process.print_banner()
     app.state.llm_power = "default_model"
     yield
     # Shutdown logic
