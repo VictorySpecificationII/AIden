@@ -67,17 +67,13 @@ def decide_model(resources):
     """Decides which model to run based on the detected resources."""
     cpu_info = resources.get("cpu_info")
     
-    # Example edge device criteria
-    edge_device_criteria = {
-        "max_cores": 2,          # Max cores for an edge device
-        "max_clock_speed": 2000, # Max clock speed in MHz (2.0 GHz)
-        "acceptable_architectures": ["arm", "x86_64"] # Include ARM architectures
+    # Example criteria for non-edge (high-performance) devices
+    high_perf_device_criteria = {
+        "min_cores": 4,          # Minimum cores for high-performance devices
+        "min_clock_speed": 2500, # Minimum clock speed in MHz (2.5 GHz)
+        "acceptable_architectures": ["x86_64"]  # High-performance architectures
     }
     
-    # If `nvidia-smi` isn't installed, use the edge model
-    if not is_nvidia_smi_installed():
-        return "edge_device_model"  # Return specific model for edge devices
-
     # Parse the CPU information to extract necessary values
     if cpu_info:
         # Extract relevant lines from the CPU info
@@ -101,14 +97,18 @@ def decide_model(resources):
             if "Architecture:" in line:
                 architecture = line.split(":")[1].strip().lower()
         
-        # Determine if the device is an edge device
-        if (cores <= edge_device_criteria["max_cores"] and
-            clock_speed <= edge_device_criteria["max_clock_speed"] and
-            architecture in edge_device_criteria["acceptable_architectures"]):
-            return "edge_device_model"  # Return specific model for edge devices
-
-    # Default model for non-edge devices
-    return "default_model"
+        # Check if the device meets high-performance criteria
+        if (cores >= high_perf_device_criteria["min_cores"] and
+            clock_speed >= high_perf_device_criteria["min_clock_speed"] and
+            architecture in high_perf_device_criteria["acceptable_architectures"]):
+            # If it meets high-performance criteria, check for NVIDIA GPU support
+            if is_nvidia_smi_installed():
+                return "default_model"  # High-performance model with GPU support
+            else:
+                return "edge_device_model"  # High-performance CPU, but no GPU
+        
+    # If CPU doesn't meet high-performance criteria, use the edge model
+    return "edge_device_model"
 
 def boot_checks():
     environment = detect_environment()
