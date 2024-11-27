@@ -6,7 +6,6 @@ from contextlib import asynccontextmanager
 from opentelemetry import trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 import telemetry
-import boot_process
 import asyncio
 
 # llm stuff
@@ -22,7 +21,7 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     boot_process.print_banner()
-    app.state.llm_power = "default_model"#boot_process.boot_checks()
+    app.state.llm_power = "default_model"
     yield
     # Shutdown logic
     app.state.llm_power = None  # Clear or reset the state if needed
