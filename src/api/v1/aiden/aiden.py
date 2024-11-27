@@ -7,6 +7,7 @@ from opentelemetry import trace
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 import telemetry
 import boot_process
+import asyncio
 
 # llm stuff
 from llama_index.core import SimpleDirectoryReader, VectorStoreIndex
@@ -106,7 +107,7 @@ async def generate():
     # response = llm.complete("Hello! Can you tell me a poem about cats and dogs?")
     # print(response.text)
 
-    response_iter = llm.stream_complete("What is the meaning of life?")
+    response_iter = await asyncio.to_thread(llm.stream_complete, "What is the meaning of life?")
     for response in response_iter:
         print(response.delta, end="", flush=True)
     print("done")
