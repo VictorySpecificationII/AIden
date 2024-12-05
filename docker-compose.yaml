@@ -142,6 +142,27 @@ services:
       - prometheus
       #- api
 
+  # ollama-cpu:
+  #   image: ollama/ollama
+  #   container_name: ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama-data-cpu:/root/.ollama
+  #   restart: always
+
+  # ollama-gpu:
+  #   image: ollama/ollama
+  #   container_name: ollama-gpu
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama-data:/root/.ollama
+  #   runtime: nvidia
+  #   environment:
+  #     - NVIDIA_VISIBLE_DEVICES=all
+  #   restart: always
+
   # heimdall:
   #   image: linuxserver/heimdall:latest
   #   container_name: heimdall
@@ -281,3 +302,5 @@ volumes:
   alertmanager-data:
   minio-data:
   postgres-data:
+  ollama-data-cpu:
+  ollama-data-gpu:
