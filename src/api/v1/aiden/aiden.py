@@ -10,10 +10,9 @@ import asyncio
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    app.state.llm_power = "default_model"
+    # Startup logic
     yield
     # Shutdown logic
-    app.state.llm_power = None  # Clear or reset the state if needed
 
 # Initialize FastAPI apilication
 app = FastAPI(lifespan=lifespan)
