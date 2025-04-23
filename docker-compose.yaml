@@ -1,5 +1,6 @@
 version: "3"
 services:
+      
   otel-collector:
     image: otel/opentelemetry-collector:latest
     container_name: otel-collector
@@ -140,7 +141,6 @@ services:
     depends_on:
       - otel-collector
       - prometheus
-      - api
 
   heimdall:
     image: linuxserver/heimdall:latest
@@ -154,121 +154,142 @@ services:
 
   api:
     build:
-      context: .
-      dockerfile: ./src/api/v1/aiden/Dockerfile
-    image: aiden/api:latest  # Use the custom image name here
-    container_name: aiden-api
+      context: ./src/aiden
+      dockerfile: Dockerfile
+    ports:
+      - 8000:8000
     networks:
       - dev
+
+  ollama-cpu:
+    image: ollama/ollama
+    container_name: ollama-cpu
     ports:
-      - "8000:8000"
-    depends_on:
-      - otel-collector
+      - "11434:11434"
+    volumes:
+      - ollama-data-cpu:/root/.ollama
+    restart: always
+    networks:
+      - dev
+
+  # ollama-gpu:
+  #   image: ollama/ollama
+  #   container_name: ollama-gpu
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama-data:/root/.ollama
+  #   runtime: nvidia
+  #   environment:
+  #     - NVIDIA_VISIBLE_DEVICES=all
+  #   restart: always
+  #   networks:
+  #     - dev
 
    # MLFlow Tracking Server to track experiments for ML
-  mlflow:
-    restart: always
-    build:
-      context: .
-      dockerfile: ./tools/mlops/mlflow/Dockerfile
-    image: mlflow/mlflow:latest  # Use the custom image name here
-    container_name: mlflow
-    depends_on:
-      - postgres
-      - minio
-    ports:
-      - "5000:5000"
-    networks:
-      - dev
-    environment:
-      - AWS_ACCESS_KEY_ID=definitelyinsecure
-      - AWS_SECRET_ACCESS_KEY=notsosecretisitnow
-      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
-      - MLFLOW_S3_IGNORE_TLS=true
-    command: >
-      mlflow server
-      --backend-store-uri postgresql://postgres:postgres@postgres:5432/postgres
-      --host 0.0.0.0
-      --serve-artifacts
-      --artifacts-destination minio://mlflow
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://mlflow:5000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # mlflow:
+  #   restart: always
+  #   build:
+  #     context: .
+  #     dockerfile: ./tools/mlops/mlflow/Dockerfile
+  #   image: mlflow/mlflow:latest  # Use the custom image name here
+  #   container_name: mlflow
+  #   depends_on:
+  #     - postgres
+  #     - minio
+  #   ports:
+  #     - "5000:5000"
+  #   networks:
+  #     - dev
+  #   environment:
+  #     - AWS_ACCESS_KEY_ID=definitelyinsecure
+  #     - AWS_SECRET_ACCESS_KEY=notsosecretisitnow
+  #     - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+  #     - MLFLOW_S3_IGNORE_TLS=true
+  #   command: >
+  #     mlflow server
+  #     --backend-store-uri postgresql://postgres:postgres@postgres:5432/postgres
+  #     --host 0.0.0.0
+  #     --serve-artifacts
+  #     --artifacts-destination minio://mlflow
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://mlflow:5000/"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
 
-  postgres:
-    restart: always
-    image: postgres
-    container_name: postgresql
-    networks:
-      - dev
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DATABASE=mlflow
-    volumes:
-      - postgres-data:/var/lib/postgresql/data/
-    healthcheck:
-      test: ["CMD", "pg_isready", "-p", "5432", "-U", "postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 3
+  # postgres:
+  #   restart: always
+  #   image: postgres
+  #   container_name: postgresql
+  #   networks:
+  #     - dev
+  #   environment:
+  #     - POSTGRES_USER=postgres
+  #     - POSTGRES_PASSWORD=postgres
+  #     - POSTGRES_DATABASE=mlflow
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data/
+  #   healthcheck:
+  #     test: ["CMD", "pg_isready", "-p", "5432", "-U", "postgres"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 3
 
   # S3 storage for MLFlow
-  minio:
-    restart: always
-    image: minio/minio:latest
-    container_name: minio
-    volumes:
-      - minio-data:/data
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    networks:
-      - dev
-    environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
-      - MINIO_ADDRESS=:9000
-      - MINIO_PORT=9000
-      - MINIO_STORAGE_USE_HTTPS=False
-      - MINIO_CONSOLE_ADDRESS=:9001
-    command: server --console-address ":9001" /data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://minio:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
+  # minio:
+  #   restart: always
+  #   image: minio/minio:latest
+  #   container_name: minio
+  #   volumes:
+  #     - minio-data:/data
+  #   ports:
+  #     - "9000:9000"
+  #     - "9001:9001"
+  #   networks:
+  #     - dev
+  #   environment:
+  #     - MINIO_ROOT_USER=minioadmin
+  #     - MINIO_ROOT_PASSWORD=minioadmin
+  #     - MINIO_ADDRESS=:9000
+  #     - MINIO_PORT=9000
+  #     - MINIO_STORAGE_USE_HTTPS=False
+  #     - MINIO_CONSOLE_ADDRESS=:9001
+  #   command: server --console-address ":9001" /data
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://minio:9000/minio/health/live"]
+  #     interval: 30s
+  #     timeout: 20s
+  #     retries: 3
 
-  job_create_s3_bucket:
-    container_name: job_create_bucket
-    image: minio/mc
-    depends_on:
-      - minio
-    networks:
-      - dev
-    entrypoint: >
-      /bin/sh -c "
-      /usr/bin/mc alias set s3minio http://minio:9000 minioadmin minioadmin;
-      /usr/bin/mc mb s3minio/mlflow;
-      /usr/bin/mc policy set public s3minio/mlflow;
-      exit 0;
-      "
+  # job_create_s3_bucket:
+  #   container_name: job_create_bucket
+  #   image: minio/mc
+  #   depends_on:
+  #     - minio
+  #   networks:
+  #     - dev
+  #   entrypoint: >
+  #     /bin/sh -c "
+  #     /usr/bin/mc alias set s3minio http://minio:9000 minioadmin minioadmin;
+  #     /usr/bin/mc mb s3minio/mlflow;
+  #     /usr/bin/mc policy set public s3minio/mlflow;
+  #     exit 0;
+  #     "
 
-  job_create_s3_accesskey:
-    container_name: job_create_accesskey
-    image: minio/mc
-    depends_on:
-      - minio
-    networks:
-      - dev
-    entrypoint: >
-      /bin/sh -c "
-      /usr/bin/mc alias set s3minio http://minio:9000 minioadmin minioadmin;
-      /usr/bin/mc admin user svcacct add --access-key "definitelyinsecure" --secret-key "notsosecretisitnow" --name mlflow --description connection s3minio minioadmin;
-      exit 0;
-      "
+  # job_create_s3_accesskey:
+  #   container_name: job_create_accesskey
+  #   image: minio/mc
+  #   depends_on:
+  #     - minio
+  #   networks:
+  #     - dev
+  #   entrypoint: >
+  #     /bin/sh -c "
+  #     /usr/bin/mc alias set s3minio http://minio:9000 minioadmin minioadmin;
+  #     /usr/bin/mc admin user svcacct add --access-key "definitelyinsecure" --secret-key "notsosecretisitnow" --name mlflow --description connection s3minio minioadmin;
+  #     exit 0;
+  #     "
 
 networks:
   dev:
@@ -281,3 +302,5 @@ volumes:
   alertmanager-data:
   minio-data:
   postgres-data:
+  ollama-data-cpu:
+  ollama-data-gpu:
