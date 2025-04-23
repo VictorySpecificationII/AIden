@@ -152,14 +152,25 @@ services:
     networks:
       - dev
 
+  api:
+    build:
+      context: ./src/aiden
+      dockerfile: Dockerfile
+    ports:
+      - 8000:8000
+    networks:
+      - dev
+
   ollama-cpu:
     image: ollama/ollama
-    container_name: ollama
+    container_name: ollama-cpu
     ports:
       - "11434:11434"
     volumes:
       - ollama-data-cpu:/root/.ollama
     restart: always
+    networks:
+      - dev
 
   # ollama-gpu:
   #   image: ollama/ollama
@@ -172,6 +183,8 @@ services:
   #   environment:
   #     - NVIDIA_VISIBLE_DEVICES=all
   #   restart: always
+  #   networks:
+  #     - dev
 
    # MLFlow Tracking Server to track experiments for ML
   # mlflow:
