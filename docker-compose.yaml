@@ -1,5 +1,6 @@
 version: "3"
 services:
+      
   otel-collector:
     image: otel/opentelemetry-collector:latest
     container_name: otel-collector
@@ -140,16 +141,25 @@ services:
     depends_on:
       - otel-collector
       - prometheus
-      #- api
 
-  # ollama-cpu:
-  #   image: ollama/ollama
-  #   container_name: ollama
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ollama-data-cpu:/root/.ollama
-  #   restart: always
+  heimdall:
+    image: linuxserver/heimdall:latest
+    container_name: heimdall
+    ports:
+      - "8091:80"
+    volumes:
+      - heimdall-data:/config
+    networks:
+      - dev
+
+  ollama-cpu:
+    image: ollama/ollama
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-data-cpu:/root/.ollama
+    restart: always
 
   # ollama-gpu:
   #   image: ollama/ollama
@@ -162,29 +172,6 @@ services:
   #   environment:
   #     - NVIDIA_VISIBLE_DEVICES=all
   #   restart: always
-
-  # heimdall:
-  #   image: linuxserver/heimdall:latest
-  #   container_name: heimdall
-  #   ports:
-  #     - "8091:80"
-  #   volumes:
-  #     - heimdall-data:/config
-  #   networks:
-  #     - dev
-
-  # api:
-  #   build:
-  #     context: .
-  #     dockerfile: ./src/api/v1/aiden/Dockerfile
-  #   image: aiden/api:latest  # Use the custom image name here
-  #   container_name: aiden-api
-  #   networks:
-  #     - dev
-  #   ports:
-  #     - "8000:8000"
-  #   depends_on:
-  #     - otel-collector
 
    # MLFlow Tracking Server to track experiments for ML
   # mlflow:
