@@ -152,10 +152,11 @@ services:
     networks:
       - dev
 
-  api:
+  aiden:
     build:
       context: ./src/aiden
       dockerfile: Dockerfile
+    container_name: AIden
     ports:
       - 8000:8000
     networks:
