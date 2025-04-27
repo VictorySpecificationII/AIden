@@ -267,6 +267,7 @@ services:
       - MINIO_PORT=9000
       - MINIO_STORAGE_USE_HTTPS=False
       - MINIO_CONSOLE_ADDRESS=:9001
+      - MINIO_PROMETHEUS_AUTH_TYPE=public
     command: server --console-address ":9001" /data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://minio:9000/minio/health/live"]
