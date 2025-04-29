@@ -226,7 +226,7 @@ services:
       homepage.group: "Storage"
       homepage.name: "Qdrant"
       homepage.icon: "qdrant"
-      homepage.href: "http://localhost:6333"
+      homepage.href: "http://localhost:6333/dashboard"
 
   # ollama-gpu:
   #   image: ollama/ollama
