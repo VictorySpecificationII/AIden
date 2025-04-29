@@ -198,7 +198,7 @@ services:
     labels:
       homepage.group: "Co-Pilot"
       homepage.name: "Aiden"
-      homepage.icon: "code"
+      homepage.icon: "docker"
       homepage.href: "http://localhost:8000"
 
   ollama-cpu:
@@ -211,6 +211,11 @@ services:
     restart: always
     networks:
       - dev
+    labels:
+      homepage.group: "Machine Learning"
+      homepage.name: "Ollama | CPU Mode"
+      homepage.icon: "docker"
+      homepage.href: "http://localhost:11434"
 
   qdrant:
     image: qdrant/qdrant:v1.14.0
@@ -225,7 +230,7 @@ services:
     labels:
       homepage.group: "Storage"
       homepage.name: "Qdrant"
-      homepage.icon: "qdrant"
+      homepage.icon: "docker"
       homepage.href: "http://localhost:6333/dashboard"
 
   # ollama-gpu:
@@ -241,56 +246,72 @@ services:
   #   restart: always
   #   networks:
   #     - dev
+  #   labels:
+  #     homepage.group: "Machine Learning"
+  #     homepage.name: "Ollama | GPU Mode"
+  #     homepage.icon: "code"
+  #     homepage.href: "http://localhost:11434"
 
-   # MLFlow Tracking Server to track experiments for ML
-  # mlflow:
-  #   restart: always
-  #   build:
-  #     context: .
-  #     dockerfile: ./tools/mlops/mlflow/Dockerfile
-  #   image: mlflow/mlflow:latest  # Use the custom image name here
-  #   container_name: mlflow
-  #   depends_on:
-  #     - postgres
-  #     - minio
-  #   ports:
-  #     - "5000:5000"
-  #   networks:
-  #     - dev
-  #   environment:
-  #     - AWS_ACCESS_KEY_ID=definitelyinsecure
-  #     - AWS_SECRET_ACCESS_KEY=notsosecretisitnow
-  #     - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
-  #     - MLFLOW_S3_IGNORE_TLS=true
-  #   command: >
-  #     mlflow server
-  #     --backend-store-uri postgresql://postgres:postgres@postgres:5432/postgres
-  #     --host 0.0.0.0
-  #     --serve-artifacts
-  #     --artifacts-destination minio://mlflow
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://mlflow:5000/"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
+  # MLFlow Tracking Server to track experiments for ML
+  mlflow:
+    restart: always
+    build:
+      context: .
+      dockerfile: ./tools/mlops/mlflow/Dockerfile
+    image: mlflow/mlflow:latest  # Use the custom image name here
+    container_name: mlflow
+    depends_on:
+      - postgres
+      - minio
+    ports:
+      - "5000:5000"
+    networks:
+      - dev
+    environment:
+      - AWS_ACCESS_KEY_ID=definitelyinsecure
+      - AWS_SECRET_ACCESS_KEY=notsosecretisitnow
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - MLFLOW_S3_IGNORE_TLS=true
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://postgres:postgres@postgres:5432/postgres
+      --host 0.0.0.0
+      --serve-artifacts
+      --artifacts-destination minio://mlflow
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://mlflow:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      homepage.group: "Machine Learning"
+      homepage.name: "MLFlow"
+      homepage.icon: "docker"
+      homepage.href: "http://localhost:5000"
 
-  # postgres:
-  #   restart: always
-  #   image: postgres
-  #   container_name: postgresql
-  #   networks:
-  #     - dev
-  #   environment:
-  #     - POSTGRES_USER=postgres
-  #     - POSTGRES_PASSWORD=postgres
-  #     - POSTGRES_DATABASE=mlflow
-  #   volumes:
-  #     - postgres-data:/var/lib/postgresql/data/
-  #   healthcheck:
-  #     test: ["CMD", "pg_isready", "-p", "5432", "-U", "postgres"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 3
+
+  postgres:
+    restart: always
+    image: postgres
+    container_name: postgresql
+    networks:
+      - dev
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DATABASE=mlflow
+    volumes:
+      - postgres-data:/var/lib/postgresql/data/
+    healthcheck:
+      test: ["CMD", "pg_isready", "-p", "5432", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    labels:
+      homepage.group: "Storage"
+      homepage.name: "PostgreSQL"
+      homepage.icon: "postgres"
+      homepage.href: "http://localhost:5432"
 
   # S3 storage for MLFlow
   minio:
