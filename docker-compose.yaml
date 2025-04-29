@@ -15,6 +15,7 @@ services:
     volumes:
       - ./tools/sre/opentelemetry/otel-collector-config.yaml:/etc/otel-collector-config.yaml
 
+
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -26,6 +27,11 @@ services:
       - ./tools/sre/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     depends_on:
       - otel-collector
+    labels:
+      homepage.group: "Observability"
+      homepage.name: "Prometheus"
+      homepage.icon: "prometheus"
+      homepage.href: "http://localhost:9090"
 
   alertmanager:
     image: prom/alertmanager:latest
@@ -61,6 +67,11 @@ services:
     depends_on:
       - otel-collector
       - prometheus
+    labels:
+      homepage.group: "Observability"
+      homepage.name: "Jaeger"
+      homepage.icon: "jaeger"
+      homepage.href: "http://localhost:16686"
 
 
   # Elasticsearch service
@@ -124,6 +135,11 @@ services:
       - kibana-data:/usr/share/kibana/data
     networks:
       - dev
+    labels:
+      homepage.group: "Observability"
+      homepage.name: "Kibana"
+      homepage.icon: "kibana"
+      homepage.href: "http://localhost:5601"
 
   grafana:
     image: grafana/grafana:latest
@@ -141,6 +157,11 @@ services:
     depends_on:
       - otel-collector
       - prometheus
+    labels:
+      homepage.group: "Observability"
+      homepage.name: "Grafana"
+      homepage.icon: "grafana"
+      homepage.href: "http://localhost:3000"
 
   heimdall:
     image: linuxserver/heimdall:latest
@@ -164,7 +185,7 @@ services:
       HOMEPAGE_ALLOWED_HOSTS: localhost:8092 # required, may need port. See gethomepage.dev/installation/#homepage_allowed_hosts
     networks:
       - dev
-      
+
   aiden:
     build:
       context: ./src/aiden
@@ -174,6 +195,11 @@ services:
       - 8000:8000
     networks:
       - dev
+    labels:
+      homepage.group: "Co-Pilot"
+      homepage.name: "Aiden"
+      homepage.icon: "code"
+      homepage.href: "http://localhost:8000"
 
   ollama-cpu:
     image: ollama/ollama
@@ -196,6 +222,11 @@ services:
     restart: always
     networks:
       - dev
+    labels:
+      homepage.group: "Storage"
+      homepage.name: "Qdrant"
+      homepage.icon: "qdrant"
+      homepage.href: "http://localhost:6333"
 
   # ollama-gpu:
   #   image: ollama/ollama
@@ -287,6 +318,11 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    labels:
+      homepage.group: "Storage"
+      homepage.name: "MinIO"
+      homepage.icon: "minio"
+      homepage.href: "http://localhost:9001"
 
   # job_create_s3_bucket:
   #   container_name: job_create_bucket
