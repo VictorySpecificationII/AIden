@@ -181,6 +181,7 @@ services:
     volumes:
       - ./tools/sre/homepage:/app/config # Make sure your local config directory exists
       - /var/run/docker.sock:/var/run/docker.sock # (optional) For docker integrations
+      - ./tools/sre/homepage/background:/app/public/images
     environment:
       HOMEPAGE_ALLOWED_HOSTS: localhost:8092 # required, may need port. See gethomepage.dev/installation/#homepage_allowed_hosts
     networks:

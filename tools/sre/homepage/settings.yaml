@@ -5,3 +5,6 @@
 providers:
   openweathermap: openweathermapapikey
   weatherapi: weatherapiapikey
+
+background:
+  image: "/images/background.jpg"
