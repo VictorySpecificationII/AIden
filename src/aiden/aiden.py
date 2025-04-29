@@ -123,7 +123,7 @@ async def telemetry_middleware(request: Request, call_next):
 # --- Routes ---
 @app.get('/')
 def home():
-    return {"Chat": "Bot"}
+    return {"API": "http://localhost:8000/docs", "Documentation": "http://localhost:8000/redoc"}
 
 @app.get('/ask')
 def ask(prompt: str):
