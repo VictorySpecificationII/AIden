@@ -15,6 +15,7 @@ services:
     volumes:
       - ./tools/sre/opentelemetry/otel-collector-config.yaml:/etc/otel-collector-config.yaml
 
+
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -26,6 +27,11 @@ services:
       - ./tools/sre/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
     depends_on:
       - otel-collector
+    labels:
+      homepage.group: "Observability"
+      homepage.name: "Prometheus"
+      homepage.icon: "prometheus"
+      homepage.href: "http://localhost:9090"
 
   alertmanager:
     image: prom/alertmanager:latest
@@ -61,6 +67,11 @@ services:
     depends_on:
       - otel-collector
       - prometheus
+    labels:
+      homepage.group: "Observability"
+      homepage.name: "Jaeger"
+      homepage.icon: "jaeger"
+      homepage.href: "http://localhost:16686"
 
 
   # Elasticsearch service
@@ -124,6 +135,11 @@ services:
       - kibana-data:/usr/share/kibana/data
     networks:
       - dev
+    labels:
+      homepage.group: "Observability"
+      homepage.name: "Kibana"
+      homepage.icon: "kibana"
+      homepage.href: "http://localhost:5601"
 
   grafana:
     image: grafana/grafana:latest
@@ -141,25 +157,50 @@ services:
     depends_on:
       - otel-collector
       - prometheus
+    labels:
+      homepage.group: "Observability"
+      homepage.name: "Grafana"
+      homepage.icon: "grafana"
+      homepage.href: "http://localhost:3000"
 
-  heimdall:
-    image: linuxserver/heimdall:latest
-    container_name: heimdall
+  # heimdall:
+  #   image: linuxserver/heimdall:latest
+  #   container_name: heimdall
+  #   ports:
+  #     - "8091:80"
+  #   volumes:
+  #     - heimdall-data:/config
+  #   networks:
+  #     - dev
+
+  homepage:
+    image: ghcr.io/gethomepage/homepage:latest
+    container_name: homepage
     ports:
-      - "8091:80"
+      - 8092:3000
     volumes:
-      - heimdall-data:/config
+      - ./tools/sre/homepage:/app/config # Make sure your local config directory exists
+      - /var/run/docker.sock:/var/run/docker.sock # (optional) For docker integrations
+      - ./tools/sre/homepage/background:/app/public/images
+    environment:
+      HOMEPAGE_ALLOWED_HOSTS: localhost:8092 # required, may need port. See gethomepage.dev/installation/#homepage_allowed_hosts
     networks:
       - dev
 
-  api:
+  aiden:
     build:
       context: ./src/aiden
       dockerfile: Dockerfile
+    container_name: AIden
     ports:
       - 8000:8000
     networks:
       - dev
+    labels:
+      homepage.group: "Co-Pilot"
+      homepage.name: "Aiden"
+      homepage.icon: "docker"
+      homepage.href: "http://localhost:8000"
 
   ollama-cpu:
     image: ollama/ollama
@@ -171,6 +212,27 @@ services:
     restart: always
     networks:
       - dev
+    labels:
+      homepage.group: "Machine Learning"
+      homepage.name: "Ollama | CPU Mode"
+      homepage.icon: "docker"
+      homepage.href: "http://localhost:11434"
+
+  qdrant:
+    image: qdrant/qdrant:v1.14.0
+    container_name: qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: always
+    networks:
+      - dev
+    labels:
+      homepage.group: "Storage"
+      homepage.name: "Qdrant"
+      homepage.icon: "docker"
+      homepage.href: "http://localhost:6333/dashboard"
 
   # ollama-gpu:
   #   image: ollama/ollama
@@ -185,82 +247,104 @@ services:
   #   restart: always
   #   networks:
   #     - dev
+  #   labels:
+  #     homepage.group: "Machine Learning"
+  #     homepage.name: "Ollama | GPU Mode"
+  #     homepage.icon: "code"
+  #     homepage.href: "http://localhost:11434"
 
-   # MLFlow Tracking Server to track experiments for ML
-  # mlflow:
-  #   restart: always
-  #   build:
-  #     context: .
-  #     dockerfile: ./tools/mlops/mlflow/Dockerfile
-  #   image: mlflow/mlflow:latest  # Use the custom image name here
-  #   container_name: mlflow
-  #   depends_on:
-  #     - postgres
-  #     - minio
-  #   ports:
-  #     - "5000:5000"
-  #   networks:
-  #     - dev
-  #   environment:
-  #     - AWS_ACCESS_KEY_ID=definitelyinsecure
-  #     - AWS_SECRET_ACCESS_KEY=notsosecretisitnow
-  #     - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
-  #     - MLFLOW_S3_IGNORE_TLS=true
-  #   command: >
-  #     mlflow server
-  #     --backend-store-uri postgresql://postgres:postgres@postgres:5432/postgres
-  #     --host 0.0.0.0
-  #     --serve-artifacts
-  #     --artifacts-destination minio://mlflow
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://mlflow:5000/"]
-  #     interval: 30s
-  #     timeout: 10s
-  #     retries: 3
+  # MLFlow Tracking Server to track experiments for ML
+  mlflow:
+    restart: always
+    build:
+      context: .
+      dockerfile: ./tools/mlops/mlflow/Dockerfile
+    image: mlflow/mlflow:latest  # Use the custom image name here
+    container_name: mlflow
+    depends_on:
+      - postgres
+      - minio
+    ports:
+      - "5000:5000"
+    networks:
+      - dev
+    environment:
+      - AWS_ACCESS_KEY_ID=definitelyinsecure
+      - AWS_SECRET_ACCESS_KEY=notsosecretisitnow
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+      - MLFLOW_S3_IGNORE_TLS=true
+    command: >
+      mlflow server
+      --backend-store-uri postgresql://postgres:postgres@postgres:5432/postgres
+      --host 0.0.0.0
+      --serve-artifacts
+      --artifacts-destination minio://mlflow
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://mlflow:5000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      homepage.group: "Machine Learning"
+      homepage.name: "MLFlow"
+      homepage.icon: "docker"
+      homepage.href: "http://localhost:5000"
 
-  # postgres:
-  #   restart: always
-  #   image: postgres
-  #   container_name: postgresql
-  #   networks:
-  #     - dev
-  #   environment:
-  #     - POSTGRES_USER=postgres
-  #     - POSTGRES_PASSWORD=postgres
-  #     - POSTGRES_DATABASE=mlflow
-  #   volumes:
-  #     - postgres-data:/var/lib/postgresql/data/
-  #   healthcheck:
-  #     test: ["CMD", "pg_isready", "-p", "5432", "-U", "postgres"]
-  #     interval: 5s
-  #     timeout: 5s
-  #     retries: 3
+
+  postgres:
+    restart: always
+    image: postgres
+    container_name: postgresql
+    networks:
+      - dev
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DATABASE=mlflow
+    volumes:
+      - postgres-data:/var/lib/postgresql/data/
+    healthcheck:
+      test: ["CMD", "pg_isready", "-p", "5432", "-U", "postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 3
+    labels:
+      homepage.group: "Storage"
+      homepage.name: "PostgreSQL"
+      homepage.icon: "postgres"
+      homepage.href: "http://localhost:5432"
 
   # S3 storage for MLFlow
-  # minio:
-  #   restart: always
-  #   image: minio/minio:latest
-  #   container_name: minio
-  #   volumes:
-  #     - minio-data:/data
-  #   ports:
-  #     - "9000:9000"
-  #     - "9001:9001"
-  #   networks:
-  #     - dev
-  #   environment:
-  #     - MINIO_ROOT_USER=minioadmin
-  #     - MINIO_ROOT_PASSWORD=minioadmin
-  #     - MINIO_ADDRESS=:9000
-  #     - MINIO_PORT=9000
-  #     - MINIO_STORAGE_USE_HTTPS=False
-  #     - MINIO_CONSOLE_ADDRESS=:9001
-  #   command: server --console-address ":9001" /data
-  #   healthcheck:
-  #     test: ["CMD", "curl", "-f", "http://minio:9000/minio/health/live"]
-  #     interval: 30s
-  #     timeout: 20s
-  #     retries: 3
+  minio:
+    restart: always
+    image: minio/minio:latest
+    container_name: minio
+    volumes:
+      - minio-data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - dev
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_ADDRESS=:9000
+      - MINIO_PORT=9000
+      - MINIO_STORAGE_USE_HTTPS=False
+      - MINIO_CONSOLE_ADDRESS=:9001
+      - MINIO_PROMETHEUS_AUTH_TYPE=public
+    command: server --console-address ":9001" /data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://minio:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    labels:
+      homepage.group: "Storage"
+      homepage.name: "MinIO"
+      homepage.icon: "minio"
+      homepage.href: "http://localhost:9001"
 
   # job_create_s3_bucket:
   #   container_name: job_create_bucket
@@ -298,9 +382,10 @@ volumes:
   grafana-data:
   elastic-data:
   kibana-data:
-  heimdall-data:
+  # heimdall-data:
   alertmanager-data:
   minio-data:
   postgres-data:
   ollama-data-cpu:
   ollama-data-gpu:
+  qdrant-data:

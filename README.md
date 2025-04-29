@@ -26,17 +26,14 @@ docker-compose up -d
 ```
 ## Integrating your implementation with monitoring
 
-The OTel collector is primed to accept metrics, logs and traces on http://localhost:4317. Any code should use that as a target to send to.
+The OTel collector is primed to accept metrics, logs and traces on http://localhost:4317. At the minute, it does so over gRPC. You can enable HTTP if you need it. Any code should use that as a target to send to.
 
 ## Extras
 
-The deployment includes Heimdall, an application dashboard. To make use of it:
+The deployment includes Homepage, an application dashboard. To make use of it:
 
  - Navigate to
 ```bash
-http://localhost:8091
+http://localhost:8092
 ```
- - Click Settings > Import > Browse
- - Select heimdall.json from the project directory and hit "Import"
-
- Now you have an application dashboard you can use for quick access.
+The dashboard performs service auto-discovery so if you add a service to the stack, and label it the same way the other services are, it will show up in the dashboard automagically.
