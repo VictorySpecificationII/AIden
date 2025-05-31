@@ -202,22 +202,6 @@ services:
       homepage.icon: "docker"
       homepage.href: "http://localhost:8000"
 
-  ollama-cpu:
-    image: ollama/ollama
-    container_name: ollama-cpu
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-data-cpu:/root/.ollama
-    restart: always
-    networks:
-      - dev
-    labels:
-      homepage.group: "Machine Learning"
-      homepage.name: "Ollama | CPU Mode"
-      homepage.icon: "docker"
-      homepage.href: "http://localhost:11434"
-
   qdrant:
     image: qdrant/qdrant:v1.14.0
     container_name: qdrant
@@ -234,117 +218,153 @@ services:
       homepage.icon: "docker"
       homepage.href: "http://localhost:6333/dashboard"
 
-  # ollama-gpu:
-  #   image: ollama/ollama
-  #   container_name: ollama-gpu
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ollama-data:/root/.ollama
-  #   runtime: nvidia
-  #   environment:
-  #     - NVIDIA_VISIBLE_DEVICES=all
-  #   restart: always
-  #   networks:
-  #     - dev
-  #   labels:
-  #     homepage.group: "Machine Learning"
-  #     homepage.name: "Ollama | GPU Mode"
-  #     homepage.icon: "code"
-  #     homepage.href: "http://localhost:11434"
 
-  # MLFlow Tracking Server to track experiments for ML
-  mlflow:
-    restart: always
-    build:
-      context: .
-      dockerfile: ./tools/mlops/mlflow/Dockerfile
-    image: mlflow/mlflow:latest  # Use the custom image name here
-    container_name: mlflow
-    depends_on:
-      - postgres
-      - minio
+  ollama:
+    volumes:
+      - ollama-data-gpu:/root/.ollama
+    container_name: ollama
+    pull_policy: always
+    tty: true
+    restart: unless-stopped
+    image: docker.io/ollama/ollama:latest
     ports:
-      - "5000:5000"
+      - 11434:11434
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
     networks:
       - dev
-    environment:
-      - AWS_ACCESS_KEY_ID=definitelyinsecure
-      - AWS_SECRET_ACCESS_KEY=notsosecretisitnow
-      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
-      - MLFLOW_S3_IGNORE_TLS=true
-    command: >
-      mlflow server
-      --backend-store-uri postgresql://postgres:postgres@postgres:5432/postgres
-      --host 0.0.0.0
-      --serve-artifacts
-      --artifacts-destination minio://mlflow
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://mlflow:5000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all 
+    #           capabilities: [gpu]
     labels:
       homepage.group: "Machine Learning"
-      homepage.name: "MLFlow"
-      homepage.icon: "docker"
-      homepage.href: "http://localhost:5000"
+      homepage.name: "Ollama | GPU Mode"
+      homepage.icon: "code"
+      homepage.href: "http://localhost:11434"
 
-
-  postgres:
-    restart: always
-    image: postgres
-    container_name: postgresql
+  ollama-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: ollama-webui
+    volumes:
+      - ollama-data-webui:/app/backend/data
+    depends_on:
+      - ollama
+    ports:
+      - 8080:8080
+    environment: # https://docs.openwebui.com/getting-started/env-configuration#default_models
+      - OLLAMA_BASE_URLS=http://host.docker.internal:11434 #comma separated ollama hosts
+      - ENV=dev
+      - WEBUI_AUTH=False
+      - WEBUI_NAME=valiantlynx AI
+      - WEBUI_URL=http://localhost:8080
+      - WEBUI_SECRET_KEY=t0p-s3cr3t
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    restart: unless-stopped
     networks:
       - dev
-    environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DATABASE=mlflow
-    volumes:
-      - postgres-data:/var/lib/postgresql/data/
-    healthcheck:
-      test: ["CMD", "pg_isready", "-p", "5432", "-U", "postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 3
     labels:
-      homepage.group: "Storage"
-      homepage.name: "PostgreSQL"
-      homepage.icon: "postgres"
-      homepage.href: "http://localhost:5432"
+      homepage.group: "Machine Learning"
+      homepage.name: "OpenWebUI | Ollama"
+      homepage.icon: "code"
+      homepage.href: "http://localhost:8080"
+
+  # MLFlow Tracking Server to track experiments for ML
+  # mlflow:
+  #   restart: always
+  #   build:
+  #     context: .
+  #     dockerfile: ./tools/mlops/mlflow/Dockerfile
+  #   image: mlflow/mlflow:latest  # Use the custom image name here
+  #   container_name: mlflow
+  #   depends_on:
+  #     - postgres
+  #     - minio
+  #   ports:
+  #     - "5000:5000"
+  #   networks:
+  #     - dev
+  #   environment:
+  #     - AWS_ACCESS_KEY_ID=definitelyinsecure
+  #     - AWS_SECRET_ACCESS_KEY=notsosecretisitnow
+  #     - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+  #     - MLFLOW_S3_IGNORE_TLS=true
+  #   command: >
+  #     mlflow server
+  #     --backend-store-uri postgresql://postgres:postgres@postgres:5432/postgres
+  #     --host 0.0.0.0
+  #     --serve-artifacts
+  #     --artifacts-destination minio://mlflow
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://mlflow:5000/"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #   labels:
+  #     homepage.group: "Machine Learning"
+  #     homepage.name: "MLFlow"
+  #     homepage.icon: "docker"
+  #     homepage.href: "http://localhost:5000"
+
+
+  # postgres:
+  #   restart: always
+  #   image: postgres
+  #   container_name: postgresql
+  #   networks:
+  #     - dev
+  #   environment:
+  #     - POSTGRES_USER=postgres
+  #     - POSTGRES_PASSWORD=postgres
+  #     - POSTGRES_DATABASE=mlflow
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data/
+  #   healthcheck:
+  #     test: ["CMD", "pg_isready", "-p", "5432", "-U", "postgres"]
+  #     interval: 5s
+  #     timeout: 5s
+  #     retries: 3
+  #   labels:
+  #     homepage.group: "Storage"
+  #     homepage.name: "PostgreSQL"
+  #     homepage.icon: "postgres"
+  #     homepage.href: "http://localhost:5432"
 
   # S3 storage for MLFlow
-  minio:
-    restart: always
-    image: minio/minio:latest
-    container_name: minio
-    volumes:
-      - minio-data:/data
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    networks:
-      - dev
-    environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
-      - MINIO_ADDRESS=:9000
-      - MINIO_PORT=9000
-      - MINIO_STORAGE_USE_HTTPS=False
-      - MINIO_CONSOLE_ADDRESS=:9001
-      - MINIO_PROMETHEUS_AUTH_TYPE=public
-    command: server --console-address ":9001" /data
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://minio:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
-    labels:
-      homepage.group: "Storage"
-      homepage.name: "MinIO"
-      homepage.icon: "minio"
-      homepage.href: "http://localhost:9001"
+  # minio:
+  #   restart: always
+  #   image: minio/minio:latest
+  #   container_name: minio
+  #   volumes:
+  #     - minio-data:/data
+  #   ports:
+  #     - "9000:9000"
+  #     - "9001:9001"
+  #   networks:
+  #     - dev
+  #   environment:
+  #     - MINIO_ROOT_USER=minioadmin
+  #     - MINIO_ROOT_PASSWORD=minioadmin
+  #     - MINIO_ADDRESS=:9000
+  #     - MINIO_PORT=9000
+  #     - MINIO_STORAGE_USE_HTTPS=False
+  #     - MINIO_CONSOLE_ADDRESS=:9001
+  #     - MINIO_PROMETHEUS_AUTH_TYPE=public
+  #   command: server --console-address ":9001" /data
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://minio:9000/minio/health/live"]
+  #     interval: 30s
+  #     timeout: 20s
+  #     retries: 3
+  #   labels:
+  #     homepage.group: "Storage"
+  #     homepage.name: "MinIO"
+  #     homepage.icon: "minio"
+  #     homepage.href: "http://localhost:9001"
 
   # job_create_s3_bucket:
   #   container_name: job_create_bucket
@@ -386,6 +406,6 @@ volumes:
   alertmanager-data:
   minio-data:
   postgres-data:
-  ollama-data-cpu:
   ollama-data-gpu:
+  ollama-data-webui:
   qdrant-data:
