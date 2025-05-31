@@ -373,6 +373,11 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
     labels:
       homepage.group: "Storage"
       homepage.name: "MinIO"
@@ -380,8 +385,8 @@ services:
       homepage.href: "http://localhost:9001"
 
 
-  job_create_s3_accesskey:
-    container_name: job_create_accesskey
+  minio_init:
+    container_name: minio_init_container
     image: minio/mc
     depends_on:
       - minio
@@ -391,6 +396,8 @@ services:
       /bin/sh -c "
       /usr/bin/mc alias set s3minio http://minio:9000 minioadmin minioadmin;
       /usr/bin/mc admin user svcacct add --access-key "definitelyinsecure" --secret-key "notsosecretisitnow" --name mlflow --description connection s3minio minioadmin;
+      /usr/bin/mc mb s3minio/mlflow;
+      /usr/bin/mc policy set public s3minio/mlflow;
       exit 0;
       "
 
