@@ -21,6 +21,13 @@ pylint <path-to-file.py>
 
 ### Docker Compose
 
+#### First Time Setup
+```bash
+chmod +x ./bootstrap/nvidia-container-runtime.sh
+bash ./bootstrap/nvidia-container-runtime.sh
+```
+
+#### Subsequently
 ```bash
 docker-compose up -d
 ```
@@ -37,3 +44,4 @@ The deployment includes Homepage, an application dashboard. To make use of it:
 http://localhost:8092
 ```
 The dashboard performs service auto-discovery so if you add a service to the stack, and label it the same way the other services are, it will show up in the dashboard automagically.
+

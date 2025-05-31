@@ -233,13 +233,13 @@ services:
       - OLLAMA_KEEP_ALIVE=24h
     networks:
       - dev
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all 
-    #           capabilities: [gpu]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all 
+              capabilities: [gpu]
     labels:
       homepage.group: "Machine Learning"
       homepage.name: "Ollama | GPU Mode"
