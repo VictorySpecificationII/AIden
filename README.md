@@ -2,6 +2,11 @@
 
 Copilot, akin to Jarvis from Iron Man. A project inspired long before the GPT days. Uses OpenTelemetry for vendor-agnostic telemetry, forwarding metrics, logs, traces and spans to a collector.
 
+## Software Versions
+
+ - Python3: 3.10.12
+ - Venv: python3.10-venv
+ 
 ## Test
 
 To run the pytest suite, navigate to the root directory of the project and run 

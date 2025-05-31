@@ -379,35 +379,6 @@ services:
       homepage.icon: "minio"
       homepage.href: "http://localhost:9001"
 
-  job_create_s3_bucket:
-    container_name: job_create_bucket
-    image: minio/mc
-    depends_on:
-      - minio
-    networks:
-      - dev
-    entrypoint: >
-      /bin/sh -c "
-      /usr/bin/mc alias set s3minio http://minio:9000 minioadmin minioadmin;
-      /usr/bin/mc mb s3minio/mlflow;
-      /usr/bin/mc policy set public s3minio/mlflow;
-      exit 0;
-      "
-
-  job_create_s3_accesskey:
-    container_name: job_create_accesskey
-    image: minio/mc
-    depends_on:
-      - minio
-    networks:
-      - dev
-    entrypoint: >
-      /bin/sh -c "
-      /usr/bin/mc alias set s3minio http://minio:9000 minioadmin minioadmin;
-      /usr/bin/mc admin user svcacct add --access-key "definitelyinsecure" --secret-key "notsosecretisitnow" --name mlflow --description connection s3minio minioadmin;
-      exit 0;
-      "
-
 networks:
   dev:
 
