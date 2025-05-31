@@ -16,6 +16,19 @@ services:
       - ./tools/sre/opentelemetry/otel-collector-config.yaml:/etc/otel-collector-config.yaml
 
 
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:4.1.1-4.0.4-ubuntu22.04
+    container_name: dcgm-exporter
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    ports:
+      - "9400:9400"  # Prometheus will scrape metrics from here
+    command: ["dcgm-exporter"]
+    networks:
+      - dev
+
+
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus

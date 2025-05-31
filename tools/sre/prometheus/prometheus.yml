@@ -17,6 +17,10 @@ scrape_configs:
     static_configs:
       - targets: ['minio:9000']
 
+  - job_name: 'dcgm-exporter'
+    static_configs:
+      - targets: ['dcgm-exporter:9400']
+
 alerting:
   alertmanagers:
     - scheme: http
