@@ -394,6 +394,7 @@ services:
       - dev
     entrypoint: >
       /bin/sh -c "
+      sleep 30s;
       /usr/bin/mc alias set s3minio http://minio:9000 minioadmin minioadmin;
       /usr/bin/mc admin user svcacct add --access-key "definitelyinsecure" --secret-key "notsosecretisitnow" --name mlflow --description connection s3minio minioadmin;
       /usr/bin/mc mb s3minio/mlflow;
