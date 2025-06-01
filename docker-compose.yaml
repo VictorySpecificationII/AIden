@@ -311,7 +311,7 @@ services:
       --backend-store-uri postgresql://postgres:postgres@postgres:5432/postgres
       --host 0.0.0.0
       --serve-artifacts
-      --artifacts-destination minio://mlflow
+      --artifacts-destination s3://mlflow
     healthcheck:
       test: ["CMD", "curl", "-f", "http://mlflow:5000/"]
       interval: 30s
