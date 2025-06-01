@@ -255,7 +255,7 @@ services:
               capabilities: [gpu]
     labels:
       homepage.group: "Machine Learning"
-      homepage.name: "Ollama | GPU Mode"
+      homepage.name: "Ollama"
       homepage.icon: "si-ollama"
       homepage.href: "http://localhost:11434"
 
@@ -282,7 +282,7 @@ services:
       - dev
     labels:
       homepage.group: "Machine Learning"
-      homepage.name: "OpenWebUI | Ollama"
+      homepage.name: "OpenWebUI"
       homepage.icon: "si-openai"
       homepage.href: "http://localhost:8080"
 
