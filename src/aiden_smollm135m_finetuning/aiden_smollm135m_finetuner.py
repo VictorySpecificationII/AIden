@@ -122,4 +122,5 @@ with mlflow.start_run():
     mlflow.log_artifacts(LOGS_DIR, artifact_path="training-logs")
 
 # Optional: remove temporary dirs after logging
-# shutil.rmtree(RUN_DIR)
+shutil.rmtree(RUN_DIR)
+shutil.rmtree(LOCAL_DATA_DIR)

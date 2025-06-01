@@ -286,6 +286,27 @@ services:
       homepage.icon: "si-openai"
       homepage.href: "http://localhost:8080"
 
+  tensorboard:
+    build:
+      context: .
+      dockerfile: ./tools/mlops/tensorboard/Dockerfile
+    container_name: tensorboard
+    networks:
+      - dev
+    ports:
+      - "6006:6006"
+    environment:
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_ENDPOINT_URL: http://minio:9000
+    command: >
+      --logdir s3://huggingface-datasets/english_quotes/training-logs --host 0.0.0.0
+    labels:
+      homepage.group: "Machine Learning"
+      homepage.name: "Tensorboard"
+      homepage.icon: "si-tensorflow"
+      homepage.href: "http://localhost:6006"
+
   # MLFlow Tracking Server to track experiments for ML
   mlflow:
     restart: always

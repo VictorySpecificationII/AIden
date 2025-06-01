@@ -5,3 +5,13 @@
 [2025-04-29T15:38:54.305Z] info: widgets.yaml was copied to the config folder
 [2025-04-29T15:38:54.313Z] info: custom.css was copied to the config folder
 [2025-04-29T15:38:54.321Z] info: custom.js was copied to the config folder
+[2025-06-01T10:57:53.152Z] error: <httpProxy> Error calling https://api.github.com/repos/gethomepage/homepage/releases...
+[2025-06-01T10:57:53.156Z] error: <httpProxy> [
+  500,
+  [Error: getaddrinfo EAI_AGAIN api.github.com] {
+    errno: -3001,
+    code: 'EAI_AGAIN',
+    syscall: 'getaddrinfo',
+    hostname: 'api.github.com'
+  }
+]
