@@ -1,5 +1,6 @@
 import torch
 import os
+import shutil
 import mlflow
 import transformers
 import boto3
@@ -20,6 +21,7 @@ print("Transformers version:", transformers.__version__)
 dataset_name = "Abirate/english_quotes"
 local_path = "/tmp/ml_data"
 bucket_name = "huggingface-datasets"
+
 # --- Configuration ---
 MODEL_NAME = "HuggingFaceTB/SmolLM-135M"
 EXPERIMENT_NAME = "smollm-finetune"
@@ -90,7 +92,6 @@ download_dataset_from_minio(S3_BUCKET, S3_PREFIX, LOCAL_DATA_DIR)
 dataset = load_from_disk(LOCAL_DATA_DIR)
 
 # --- Tokenize ---
-
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 tokenizer.pad_token = tokenizer.eos_token
 
@@ -107,10 +108,10 @@ model = AutoModelForCausalLM.from_pretrained(MODEL_NAME)
 
 # --- Training Args ---
 training_args = TrainingArguments(
-    output_dir="./results",
+    output_dir="/tmp/results",
     per_device_train_batch_size=2,
     num_train_epochs=2,
-    logging_dir="./logs",
+    logging_dir="/tmp/logs",
     logging_steps=10,
     save_strategy="epoch",
     report_to="none",
@@ -133,6 +134,14 @@ with mlflow.start_run():
 
     trainer.train()
 
+    # Save locally first
     model.save_pretrained("artifacts")
     tokenizer.save_pretrained("artifacts")
-    mlflow.log_artifacts("artifacts")
+
+    # Upload artifacts and results to MLflow (MinIO)
+    mlflow.log_artifacts("artifacts", artifact_path="model-artifacts")
+    mlflow.log_artifacts("/tmp/results", artifact_path="training-results")
+
+    # Clean up local directories after upload
+    shutil.rmtree("artifacts")
+    shutil.rmtree("/tmp/results")
