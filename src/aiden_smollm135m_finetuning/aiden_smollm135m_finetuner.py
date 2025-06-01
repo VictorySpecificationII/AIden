@@ -95,7 +95,7 @@ training_args = TrainingArguments(
     logging_dir=LOGS_DIR,
     logging_steps=10,
     save_strategy="epoch",
-    report_to="none",
+    report_to="tensorboard",  # Enable TensorBoard
 )
 
 trainer = Trainer(
@@ -121,4 +121,5 @@ with mlflow.start_run():
     mlflow.log_artifacts(RESULTS_DIR, artifact_path="training-results")
     mlflow.log_artifacts(LOGS_DIR, artifact_path="training-logs")
 
-shutil.rmtree(RUN_DIR)
+# Optional: remove temporary dirs after logging
+# shutil.rmtree(RUN_DIR)
