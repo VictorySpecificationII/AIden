@@ -228,7 +228,7 @@ services:
     labels:
       homepage.group: "Storage"
       homepage.name: "Qdrant"
-      homepage.icon: "si-qdrant"
+      homepage.icon: "si-knowledgebase"
       homepage.href: "http://localhost:6333/dashboard"
 
 
