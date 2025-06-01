@@ -204,6 +204,7 @@ services:
     build:
       context: ./src/aiden
       dockerfile: Dockerfile
+    image: intellectualplayspace/aiden
     container_name: AIden
     ports:
       - 8000:8000
@@ -290,6 +291,7 @@ services:
     build:
       context: .
       dockerfile: ./tools/mlops/tensorboard/Dockerfile
+    image: intellectualplayspace/tensorboard
     container_name: tensorboard
     networks:
       - dev
@@ -300,7 +302,7 @@ services:
       AWS_SECRET_ACCESS_KEY: minioadmin
       AWS_ENDPOINT_URL: http://minio:9000
     command: >
-      --logdir s3://huggingface-datasets/english_quotes/training-logs --host 0.0.0.0
+      tensorboard --logdir s3://mlflow/tensorboard-logs --host 0.0.0.0
     labels:
       homepage.group: "Machine Learning"
       homepage.name: "Tensorboard"
@@ -313,7 +315,7 @@ services:
     build:
       context: .
       dockerfile: ./tools/mlops/mlflow/Dockerfile
-    image: mlflow/mlflow:latest  # Use the custom image name here
+    image: intellectualplayspace/mlflow  # Use the custom image name here
     container_name: mlflow
     depends_on:
       - postgres

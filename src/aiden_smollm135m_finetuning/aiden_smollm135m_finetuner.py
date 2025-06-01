@@ -21,7 +21,7 @@ MODEL_NAME = "HuggingFaceTB/SmolLM-135M"
 EXPERIMENT_NAME = "smollm-finetune"
 dataset_name = "Abirate/english_quotes"
 S3_ENDPOINT = "http://localhost:9000"
-S3_BUCKET = "huggingface-datasets"
+S3_BUCKET = "mlflow"  # <-- Use mlflow bucket here
 S3_PREFIX = "english_quotes"
 LOCAL_DATA_DIR = "/tmp/ml_data"
 RUN_DIR = "/tmp/smollm_run"
@@ -37,7 +37,7 @@ os.makedirs(LOGS_DIR, exist_ok=True)
 dataset = load_dataset(dataset_name)
 dataset.save_to_disk(LOCAL_DATA_DIR)
 
-# --- Upload to MinIO ---
+# --- Upload dataset to MinIO ---
 s3 = boto3.client(
     "s3",
     endpoint_url=S3_ENDPOINT,
@@ -55,12 +55,12 @@ def upload_dir_to_s3(local_dir, bucket, s3_prefix=""):
 
 try:
     s3.head_bucket(Bucket=S3_BUCKET)
-except:
+except Exception:
     s3.create_bucket(Bucket=S3_BUCKET)
 
 upload_dir_to_s3(LOCAL_DATA_DIR, S3_BUCKET, s3_prefix=S3_PREFIX)
 
-# --- Re-download dataset from S3 ---
+# --- Re-download dataset from MinIO ---
 def download_dataset_from_minio(bucket, prefix, target_dir):
     paginator = s3.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
@@ -95,7 +95,7 @@ training_args = TrainingArguments(
     logging_dir=LOGS_DIR,
     logging_steps=10,
     save_strategy="epoch",
-    report_to="tensorboard",  # Enable TensorBoard
+    report_to="tensorboard",
 )
 
 trainer = Trainer(
@@ -104,11 +104,28 @@ trainer = Trainer(
     train_dataset=dataset["train"].shuffle(seed=42).select(range(100)),
 )
 
+# --- Sync TensorBoard logs to flat prefix function ---
+def sync_tensorboard_logs_to_flat_prefix(bucket, experiment_id, run_id, s3_client):
+    source_prefix = f"{experiment_id}/{run_id}/artifacts/training-logs/"
+    dest_prefix = f"tensorboard-logs/{run_id}/"
+
+    paginator = s3_client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=source_prefix):
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            relative_path = key[len(source_prefix):]  # path under training-logs/
+            dest_key = dest_prefix + relative_path
+
+            print(f"Copying s3://{bucket}/{key} to s3://{bucket}/{dest_key}")
+
+            copy_source = {'Bucket': bucket, 'Key': key}
+            s3_client.copy_object(CopySource=copy_source, Bucket=bucket, Key=dest_key)
+
 # --- MLflow Logging ---
 mlflow.set_tracking_uri("http://localhost:5000")
 mlflow.set_experiment(EXPERIMENT_NAME)
 
-with mlflow.start_run():
+with mlflow.start_run() as run:
     mlflow.log_param("model_name", MODEL_NAME)
     mlflow.log_param("epochs", training_args.num_train_epochs)
 
@@ -120,6 +137,11 @@ with mlflow.start_run():
     mlflow.log_artifacts(ARTIFACTS_DIR, artifact_path="model-artifacts")
     mlflow.log_artifacts(RESULTS_DIR, artifact_path="training-results")
     mlflow.log_artifacts(LOGS_DIR, artifact_path="training-logs")
+
+    # Sync TensorBoard logs to flat prefix for easier TensorBoard consumption
+    run_id = run.info.run_id
+    experiment_id = run.info.experiment_id
+    sync_tensorboard_logs_to_flat_prefix(S3_BUCKET, experiment_id, run_id, s3)
 
 # Optional: remove temporary dirs after logging
 shutil.rmtree(RUN_DIR)
