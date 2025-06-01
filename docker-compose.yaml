@@ -228,7 +228,7 @@ services:
     labels:
       homepage.group: "Storage"
       homepage.name: "Qdrant"
-      homepage.icon: "docker"
+      homepage.icon: "si-qdrant"
       homepage.href: "http://localhost:6333/dashboard"
 
 
@@ -256,7 +256,7 @@ services:
     labels:
       homepage.group: "Machine Learning"
       homepage.name: "Ollama | GPU Mode"
-      homepage.icon: "code"
+      homepage.icon: "si-ollama"
       homepage.href: "http://localhost:11434"
 
   ollama-webui:
@@ -283,7 +283,7 @@ services:
     labels:
       homepage.group: "Machine Learning"
       homepage.name: "OpenWebUI | Ollama"
-      homepage.icon: "code"
+      homepage.icon: "si-openai"
       homepage.href: "http://localhost:8080"
 
   # MLFlow Tracking Server to track experiments for ML
@@ -320,7 +320,7 @@ services:
     labels:
       homepage.group: "Machine Learning"
       homepage.name: "MLFlow"
-      homepage.icon: "docker"
+      homepage.icon: "si-mlflow"
       homepage.href: "http://localhost:5000"
 
 
