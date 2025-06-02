@@ -169,9 +169,21 @@ import subprocess
 from pathlib import Path
 
 # --- Prepare for GGUF conversion ---
+LLAMACPP_DIR = "/home/achristofi/Desktop/AIden/tools/mlops/llama.cpp"
 LLAMACPP_CONVERTER = "/home/achristofi/Desktop/AIden/tools/mlops/llama.cpp/convert_hf_to_gguf.py"
 GGUF_DIR = "/tmp/gguf_convert"
 GGUF_OUTPUT = f"{GGUF_DIR}/smollm.gguf"
+
+os.makedirs(GGUF_DIR, exist_ok=True)
+
+# --- Clone llama.cpp if not present ---
+if not os.path.exists(LLAMACPP_CONVERTER):
+    print("📥 Cloning llama.cpp for GGUF conversion...")
+    subprocess.run([
+        "git", "clone", "--depth", "1", "https://github.com/ggml-org/llama.cpp.git", LLAMACPP_DIR
+    ], check=True)
+else:
+    print("✔️ llama.cpp already present")
 
 os.makedirs(GGUF_DIR, exist_ok=True)
 
@@ -193,6 +205,11 @@ try:
     print(f"✅ GGUF model written to {GGUF_OUTPUT}")
 except subprocess.CalledProcessError as e:
     print(f"❌ GGUF conversion failed: {e}")
+finally:
+    if os.path.exists(LLAMACPP_DIR):
+        print("🧹 Cleaning up llama.cpp repo...")
+        shutil.rmtree(LLAMACPP_DIR, ignore_errors=True)
+
 
 s3.upload_file(GGUF_OUTPUT, S3_BUCKET, f"gguf/smollm.gguf")
 print("✅ Uploaded GGUF to MinIO at gguf/smollm.gguf")
