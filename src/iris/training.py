@@ -164,3 +164,100 @@ with mlflow.start_run() as run:
 # Optional: remove temporary dirs after logging
 shutil.rmtree(RUN_DIR)
 shutil.rmtree(LOCAL_DATA_DIR)
+
+import subprocess
+from pathlib import Path
+
+# --- Prepare for GGUF conversion ---
+LLAMACPP_CONVERTER = "/home/achristofi/Desktop/AIden/tools/mlops/llama.cpp/convert_hf_to_gguf.py"
+GGUF_DIR = "/tmp/gguf_convert"
+GGUF_OUTPUT = f"{GGUF_DIR}/smollm.gguf"
+
+os.makedirs(GGUF_DIR, exist_ok=True)
+
+# Download latest model artifacts from MLflow
+client = MlflowClient()
+runs = client.search_runs(experiment_ids=[experiment_id], order_by=["start_time DESC"], max_results=1)
+latest_run = runs[0]
+model_artifact_path = client.download_artifacts(latest_run.info.run_id, "model-artifacts", GGUF_DIR)
+
+# Convert to GGUF format
+try:
+    subprocess.run([
+        "python3",
+        LLAMACPP_CONVERTER,
+        model_artifact_path,                   # Path to HF model
+        "--outfile", GGUF_OUTPUT,
+        "--outtype", "q8_0"
+    ], check=True)
+    print(f"✅ GGUF model written to {GGUF_OUTPUT}")
+except subprocess.CalledProcessError as e:
+    print(f"❌ GGUF conversion failed: {e}")
+
+s3.upload_file(GGUF_OUTPUT, S3_BUCKET, f"gguf/smollm.gguf")
+print("✅ Uploaded GGUF to MinIO at gguf/smollm.gguf")
+
+import os
+import subprocess
+from mlflow.tracking import MlflowClient
+
+# --- Config ---
+model_name = "smollm-gguf"
+experiment_name = "smollm-finetune"
+mlflow_uri = "http://localhost:5000"
+mlflow.set_tracking_uri(mlflow_uri)
+container_name = "ollama"  # Change this to your container name
+container_dest_dir = "/root/ollama_build"
+local_temp_dir = "/tmp/ollama_build"
+
+os.makedirs(local_temp_dir, exist_ok=True)
+
+import boto3
+
+# --- Setup MinIO client ---
+s3 = boto3.client(
+    "s3",
+    endpoint_url=S3_ENDPOINT,
+    aws_access_key_id="minioadmin",
+    aws_secret_access_key="minioadmin",
+)
+
+# --- Config ---
+model_name = "smollm-gguf"
+experiment_name = "smollm-finetune"
+local_temp_dir = "/tmp/ollama_build"
+os.makedirs(local_temp_dir, exist_ok=True)
+
+# --- Download GGUF model directly from MinIO ---
+gguf_s3_key = "gguf/smollm.gguf"
+gguf_local_path = os.path.join(local_temp_dir, "smollm.gguf")
+
+print(f"⬇️ Downloading GGUF model from MinIO s3://{S3_BUCKET}/{gguf_s3_key} to {gguf_local_path}")
+s3.download_file(S3_BUCKET, gguf_s3_key, gguf_local_path)
+
+if not os.path.exists(gguf_local_path):
+    raise FileNotFoundError("GGUF model file not found after downloading from MinIO.")
+
+# --- Write Modelfile ---
+modelfile_path = os.path.join(local_temp_dir, "Modelfile")
+with open(modelfile_path, "w") as f:
+    f.write(f"""
+from smollm.gguf
+parameter temperature 0.7
+parameter repeat_penalty 1.1
+""".strip())
+
+# --- Copy GGUF and Modelfile into the container ---
+print("📦 Copying GGUF and Modelfile into container...")
+subprocess.run(["docker", "exec", container_name, "mkdir", "-p", container_dest_dir], check=True)
+subprocess.run(["docker", "cp", gguf_local_path, f"{container_name}:{container_dest_dir}/smollm.gguf"], check=True)
+subprocess.run(["docker", "cp", modelfile_path, f"{container_name}:{container_dest_dir}/Modelfile"], check=True)
+
+# --- Run ollama create inside the container ---
+print("🚀 Creating Ollama model inside container...")
+subprocess.run([
+    "docker", "exec", container_name,
+    "ollama", "create", model_name, "-f", f"{container_dest_dir}/Modelfile"
+], check=True)
+
+print(f"✅ Ollama model '{model_name}' created and registered.")
