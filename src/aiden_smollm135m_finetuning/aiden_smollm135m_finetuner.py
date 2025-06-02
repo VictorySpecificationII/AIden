@@ -11,6 +11,7 @@ from transformers import (
     Trainer,
     TrainingArguments,
 )
+from mlflow.tracking import MlflowClient
 
 print("CUDA available:", torch.cuda.is_available())
 print("GPU:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "No GPU")
@@ -143,6 +144,23 @@ with mlflow.start_run() as run:
     experiment_id = run.info.experiment_id
     sync_tensorboard_logs_to_flat_prefix(S3_BUCKET, experiment_id, run_id, s3)
 
+    # --- Register the model in MLflow Model Registry ---
+
+
+    logged_model_uri = f"runs:/{run_id}/model-artifacts"
+    model_name = "smollm-english-quotes"
+    mlflow.register_model(logged_model_uri, model_name)
+
+    client = MlflowClient()
+    latest_version = client.get_latest_versions(model_name, stages=["None"])[0].version
+    client.transition_model_version_stage(
+        name=model_name,
+        version=latest_version,
+        stage="Staging",
+    )
+
+    print(f"Model registered as '{model_name}' version {latest_version} and moved to 'Staging'")
+    
 # Optional: remove temporary dirs after logging
 shutil.rmtree(RUN_DIR)
 shutil.rmtree(LOCAL_DATA_DIR)
