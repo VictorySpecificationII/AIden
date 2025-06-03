@@ -81,3 +81,5 @@ cython_debug/
 model_paths.json
 **/artifacts
 **/results
+**/iris_venv
+**/aiden_venv
