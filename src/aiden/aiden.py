@@ -1,9 +1,6 @@
-# aiden_api.py
-
 import logging
 import time
 import psutil
-import requests
 from datetime import datetime, timezone
 from typing import Any, Dict, Callable
 
@@ -23,6 +20,38 @@ from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExp
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.metrics import Observation
+
+# Your Tools class (unchanged except added here for completeness)
+from pydantic import BaseModel
+
+
+class Tools:
+    class Valves(BaseModel):
+        pass
+
+    class UserValves(BaseModel):
+        pass
+
+    def __init__(self):
+        self.valves = self.Valves()
+        self.user_valves = self.UserValves()
+
+    def get_current_date(self) -> str:
+        """
+        Get the current date.
+        :return: The current date as a string.
+        """
+        current_date = datetime.now().strftime("%A, %B %d, %Y")
+        return f"Today's date is {current_date}"
+
+    def get_current_time(self) -> str:
+        """
+        Get the current time.
+        :return: The current time as a string.
+        """
+        current_time = datetime.now().strftime("%H:%M:%S")
+        return f"Current Time: {current_time}"
+
 
 # --- OpenTelemetry Setup ---
 def configure_telemetry(service_name: str = "aiden-api"):
@@ -54,6 +83,7 @@ def configure_telemetry(service_name: str = "aiden-api"):
         "meter": metrics.get_meter(service_name),
         "tracer": trace.get_tracer(service_name),
     }
+
 
 def create_metrics(meter):
     latency_histogram = meter.create_histogram(
@@ -94,13 +124,44 @@ def create_metrics(meter):
 
     return latency_histogram, request_counter, error_counter
 
-# --- App and Middleware ---
+
+# Initialize telemetry
 telemetry = configure_telemetry()
 logger = telemetry["logger"]
 meter = telemetry["meter"]
 tracer = telemetry["tracer"]
 latency_histogram, request_counter, error_counter = create_metrics(meter)
 
+# Instantiate your Tools class once
+tools = Tools()
+
+# --- Tool wrappers that expose your class methods with tracing and dict output ---
+def get_current_date_tool() -> Dict[str, str]:
+    with tracer.start_as_current_span("tool.get_current_date"):
+        date_str = tools.get_current_date().replace("Today's date is ", "")
+        return {"date": date_str}
+
+def get_current_time_tool() -> Dict[str, str]:
+    with tracer.start_as_current_span("tool.get_current_time_simple"):
+        time_str = tools.get_current_time().replace("Current Time: ", "")
+        return {"time": time_str}
+
+# Existing example tool for ISO time
+def get_current_time(iso: bool = True) -> Dict[str, str]:
+    with tracer.start_as_current_span("tool.get_current_time"):
+        if iso:
+            now = datetime.now(timezone.utc).astimezone()
+            return {"time_iso": now.isoformat()}
+        return {"time": time.ctime()}
+
+# Tool registry
+TOOL_REGISTRY: Dict[str, Callable[..., Dict[str, Any]]] = {
+    "get_date": get_current_date_tool,
+    "get_time_simple": get_current_time_tool,
+    "get_time": get_current_time,
+}
+
+# --- FastAPI app setup ---
 app = FastAPI()
 FastAPIInstrumentor.instrument_app(app)
 
@@ -122,80 +183,20 @@ async def telemetry_middleware(request: Request, call_next):
             logger.info("Request completed: %s", request.url)
             return response
 
-
-# === Tool implementations ===================================================
-def get_current_time(*, iso: bool = True) -> Dict[str, str]:
-    """
-    Return the current system time.
-
-    Parameters
-    ----------
-    iso : bool, default True
-        If True, return ISO‑8601 formatted time. Otherwise, return
-        a human‑readable ctime string.
-
-    Returns
-    -------
-    dict
-        {"time_iso": "..."} or {"time": "..."} depending on `iso`.
-    """
-    global tracer
-    with tracer.start_as_current_span("tool.get_current_time"):
-        if iso:
-            now = datetime.now(timezone.utc).astimezone()
-            return {"time_iso": now.isoformat()}
-        return {"time": time.ctime()}
-
-# === Tool registry ==========================================================
-TOOL_REGISTRY: Dict[str, Callable[..., Dict[str, Any]]] = {
-    "get_time": get_current_time,
-}
-
-# Convenience accessor
-def call_tool(name: str, **kwargs) -> Dict[str, Any]:
-    """
-    Dynamically invoke a tool by name.
-    Raises KeyError if the tool is not registered.
-    """
-    tool = TOOL_REGISTRY[name]
-    return tool(**kwargs)
-
-# --- Routes ---
+# Routes
 @app.get('/')
 def home():
     return {"API": "http://localhost:8000/docs", "Documentation": "http://localhost:8000/redoc"}
 
-# @app.get('/ask')
-# def ask(prompt: str):
-#     try:
-#         res = requests.post('http://ollama:11434/api/generate', json={
-#             "prompt": prompt,
-#             "stream": False,
-#             "model": "smollm:135m"
-#         })
-#         return Response(content=res.text, media_type="application/json")
-#     except requests.exceptions.RequestException as e:
-#         logger.error("Failed to contact model backend: %s", str(e))
-#         raise
-
 @app.get('/tool/{tool_name}')
 async def run_tool(tool_name: str, iso: bool = True):
     try:
-        result = call_tool(tool_name, iso=iso)
+        # Pass iso only if tool supports it (get_time)
+        if tool_name == "get_time":
+            result = TOOL_REGISTRY[tool_name](iso=iso)
+        else:
+            result = TOOL_REGISTRY[tool_name]()
         return result
     except KeyError:
         return {"error": f"Tool '{tool_name}' not found"}
 
-
-# if __name__ == "__main__":
-#     # Simple standalone test for get_time tool
-#     def test_get_time():
-#         print("Testing get_time with iso=True...")
-#         result = call_tool("get_time", iso=True)
-#         print("Result:", result)
-
-#         print("Testing get_time with iso=False...")
-#         result = call_tool("get_time", iso=False)
-#         print("Result:", result)
-
-#     test_get_time()
