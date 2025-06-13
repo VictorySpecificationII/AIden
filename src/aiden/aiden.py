@@ -178,16 +178,24 @@ def home():
 #         logger.error("Failed to contact model backend: %s", str(e))
 #         raise
 
+@app.get('/tool/{tool_name}')
+async def run_tool(tool_name: str, iso: bool = True):
+    try:
+        result = call_tool(tool_name, iso=iso)
+        return result
+    except KeyError:
+        return {"error": f"Tool '{tool_name}' not found"}
 
-if __name__ == "__main__":
-    # Simple standalone test for get_time tool
-    def test_get_time():
-        print("Testing get_time with iso=True...")
-        result = call_tool("get_time", iso=True)
-        print("Result:", result)
 
-        print("Testing get_time with iso=False...")
-        result = call_tool("get_time", iso=False)
-        print("Result:", result)
+# if __name__ == "__main__":
+#     # Simple standalone test for get_time tool
+#     def test_get_time():
+#         print("Testing get_time with iso=True...")
+#         result = call_tool("get_time", iso=True)
+#         print("Result:", result)
 
-    test_get_time()
+#         print("Testing get_time with iso=False...")
+#         result = call_tool("get_time", iso=False)
+#         print("Result:", result)
+
+#     test_get_time()
