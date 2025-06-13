@@ -4,6 +4,8 @@ import logging
 import time
 import psutil
 import requests
+from datetime import datetime, timezone
+from typing import Any, Dict, Callable
 
 # third-party imports
 from fastapi import FastAPI, Request, Response
@@ -120,20 +122,72 @@ async def telemetry_middleware(request: Request, call_next):
             logger.info("Request completed: %s", request.url)
             return response
 
+
+# === Tool implementations ===================================================
+def get_current_time(*, iso: bool = True) -> Dict[str, str]:
+    """
+    Return the current system time.
+
+    Parameters
+    ----------
+    iso : bool, default True
+        If True, return ISO‑8601 formatted time. Otherwise, return
+        a human‑readable ctime string.
+
+    Returns
+    -------
+    dict
+        {"time_iso": "..."} or {"time": "..."} depending on `iso`.
+    """
+    global tracer
+    with tracer.start_as_current_span("tool.get_current_time"):
+        if iso:
+            now = datetime.now(timezone.utc).astimezone()
+            return {"time_iso": now.isoformat()}
+        return {"time": time.ctime()}
+
+# === Tool registry ==========================================================
+TOOL_REGISTRY: Dict[str, Callable[..., Dict[str, Any]]] = {
+    "get_time": get_current_time,
+}
+
+# Convenience accessor
+def call_tool(name: str, **kwargs) -> Dict[str, Any]:
+    """
+    Dynamically invoke a tool by name.
+    Raises KeyError if the tool is not registered.
+    """
+    tool = TOOL_REGISTRY[name]
+    return tool(**kwargs)
+
 # --- Routes ---
 @app.get('/')
 def home():
     return {"API": "http://localhost:8000/docs", "Documentation": "http://localhost:8000/redoc"}
 
-@app.get('/ask')
-def ask(prompt: str):
-    try:
-        res = requests.post('http://ollama:11434/api/generate', json={
-            "prompt": prompt,
-            "stream": False,
-            "model": "smollm:135m"
-        })
-        return Response(content=res.text, media_type="application/json")
-    except requests.exceptions.RequestException as e:
-        logger.error("Failed to contact model backend: %s", str(e))
-        raise
+# @app.get('/ask')
+# def ask(prompt: str):
+#     try:
+#         res = requests.post('http://ollama:11434/api/generate', json={
+#             "prompt": prompt,
+#             "stream": False,
+#             "model": "smollm:135m"
+#         })
+#         return Response(content=res.text, media_type="application/json")
+#     except requests.exceptions.RequestException as e:
+#         logger.error("Failed to contact model backend: %s", str(e))
+#         raise
+
+
+if __name__ == "__main__":
+    # Simple standalone test for get_time tool
+    def test_get_time():
+        print("Testing get_time with iso=True...")
+        result = call_tool("get_time", iso=True)
+        print("Result:", result)
+
+        print("Testing get_time with iso=False...")
+        result = call_tool("get_time", iso=False)
+        print("Result:", result)
+
+    test_get_time()
