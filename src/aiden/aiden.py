@@ -2,9 +2,11 @@ import logging
 import time
 import psutil
 from datetime import datetime, timezone
-from typing import Any, Dict, Callable
+from typing import Any, Dict
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Depends, Security
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
 # OpenTelemetry imports
@@ -23,7 +25,6 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.metrics import Observation
 
-
 # --- Tool Server Models ---
 class DateResponse(BaseModel):
     date: str
@@ -36,7 +37,6 @@ class TimeISOResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: str
-
 
 # --- Tools class ---
 class Tools:
@@ -57,7 +57,6 @@ class Tools:
     def get_current_time(self) -> str:
         current_time = datetime.now().strftime("%H:%M:%S")
         return f"Current Time: {current_time}"
-
 
 # --- OpenTelemetry Setup ---
 def configure_telemetry(service_name: str = "aiden-api"):
@@ -129,7 +128,6 @@ def create_metrics(meter):
 
     return latency_histogram, request_counter, error_counter
 
-
 # --- Init telemetry ---
 telemetry = configure_telemetry()
 logger = telemetry["logger"]
@@ -145,14 +143,28 @@ app = FastAPI(
     description="A collection of utility tools exposed via OpenAPI, with integrated telemetry and observability.",
     version="1.0.0",
     contact={
-        "name": "LucidSilicon",
-        "url": "https://lucidsilicon.ai",
-        "email": "support@lucidsilicon.ai",
+        "name": "IntellectualPlayspace",
+        "url": "https://intellectualplay.space",
+        "email": "andrew@intellectualplay.space",
     }
 )
 
 FastAPIInstrumentor.instrument_app(app)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- Auth (Allow all bearer tokens) ---
+auth_scheme = HTTPBearer()
+
+def allow_all_tokens(auth: HTTPAuthorizationCredentials = Security(auth_scheme)):
+    # No validation – accept any bearer token
+    return auth.credentials
 
 @app.middleware("http")
 async def telemetry_middleware(request: Request, call_next):
@@ -172,44 +184,37 @@ async def telemetry_middleware(request: Request, call_next):
             logger.info("Request completed: %s", request.url)
             return response
 
-
 # --- Tool Endpoints ---
 
 @app.get("/tool/get_date", response_model=DateResponse)
-def get_date():
-    """Return today's date."""
+def get_date(token: str = Depends(allow_all_tokens)):
     with tracer.start_as_current_span("tool.get_current_date"):
         date_str = tools.get_current_date().replace("Today's date is ", "")
         return {"date": date_str}
 
 @app.get("/tool/get_time_simple", response_model=TimeSimpleResponse)
-def get_time_simple():
-    """Return the current time (HH:MM:SS)."""
+def get_time_simple(token: str = Depends(allow_all_tokens)):
     with tracer.start_as_current_span("tool.get_current_time_simple"):
         time_str = tools.get_current_time().replace("Current Time: ", "")
         return {"time": time_str}
 
 @app.get("/tool/get_time", response_model=TimeISOResponse)
-def get_time(iso: bool = True):
-    """Return the current time, optionally as ISO."""
+def get_time(iso: bool = True, token: str = Depends(allow_all_tokens)):
     with tracer.start_as_current_span("tool.get_current_time"):
         if iso:
             now = datetime.now(timezone.utc).astimezone()
             return {"time_iso": now.isoformat()}
         return {"time_iso": datetime.now().isoformat()}
 
-
 # --- Tool Discovery ---
 
 @app.get("/tools", response_model=Dict[str, str])
 def list_tools():
-    """List available tools with descriptions."""
     return {
         "get_date": "Return today's date",
         "get_time_simple": "Return the current time in HH:MM:SS",
         "get_time": "Return current time in ISO 8601 format",
     }
-
 
 @app.get("/", include_in_schema=False)
 def root():
