@@ -261,7 +261,7 @@ services:
       homepage.href: "http://localhost:11434"
 
   ollama-webui:
-    image: ghcr.io/open-webui/open-webui:main
+    image: ghcr.io/open-webui/open-webui:0.6.14
     container_name: ollama-webui
     volumes:
       - ollama-data-webui:/app/backend/data
