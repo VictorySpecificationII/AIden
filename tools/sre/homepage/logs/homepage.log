@@ -15,3 +15,5 @@
     hostname: 'api.github.com'
   }
 ]
+[2025-07-27T09:14:23.865Z] info: proxmox.yaml was copied to the config folder
+[2025-07-27T09:16:22.405Z] info: proxmox.yaml was copied to the config folder

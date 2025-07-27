@@ -27,13 +27,23 @@ pylint <path-to-file.py>
 ### Docker Compose
 
 #### First Time Setup
+
+Install the NVIDIA drivers for your card before running the commands below:
+
 ```bash
+chmod +x ./bootstrap/nvidia-cuda-toolkit.sh
+bash ./bootstrap/nvidia-cuda-toolkit.sh
 chmod +x ./bootstrap/nvidia-container-runtime.sh
 bash ./bootstrap/nvidia-container-runtime.sh
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+
 ```
 
 #### Subsequently
 ```bash
+
+
 docker-compose up -d
 ```
 ## Integrating your implementation with monitoring
