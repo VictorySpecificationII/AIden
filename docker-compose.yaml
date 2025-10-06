@@ -260,34 +260,34 @@ services:
       homepage.icon: "si-ollama"
       homepage.href: "http://localhost:11434"
 
-  ollama-webui:
-    image: ghcr.io/open-webui/open-webui:cuda
-    container_name: ollama-webui
-    runtime: nvidia
-    volumes:
-      - ollama-data-webui:/app/backend/data
-    depends_on:
-      - ollama
-    ports:
-      - 8080:8080
-    environment:
-      - OLLAMA_BASE_URLS=http://host.docker.internal:11434
-      - ENV=dev
-      - WEBUI_AUTH=False
-      - WEBUI_NAME=valiantlynx AI
-      - WEBUI_URL=http://localhost:8080
-      - WEBUI_SECRET_KEY=t0p-s3cr3t
-      - RAG_EMBEDDING_MODEL_DEVICE_TYPE=cuda
-    extra_hosts:
-      - host.docker.internal:host-gateway
-    restart: unless-stopped
-    networks:
-      - dev
-    labels:
-      homepage.group: "Machine Learning"
-      homepage.name: "OpenWebUI"
-      homepage.icon: "si-openai"
-      homepage.href: "http://localhost:8080"
+#  ollama-webui:
+#    image: ghcr.io/open-webui/open-webui:main
+#    container_name: ollama-webui
+#    runtime: nvidia
+#    volumes:
+#      - ollama-data-webui:/app/backend/data
+#    depends_on:
+#      - ollama
+#    ports:
+#      - 8080:8080
+#    environment:
+#      - OLLAMA_BASE_URLS=http://host.docker.internal:11434
+#      - ENV=dev
+#      - WEBUI_AUTH=False
+#      - WEBUI_NAME=valiantlynx AI
+#      - WEBUI_URL=http://localhost:8080
+#      - WEBUI_SECRET_KEY=t0p-s3cr3t
+#      - RAG_EMBEDDING_MODEL_DEVICE_TYPE=cuda
+#    extra_hosts:
+#      - host.docker.internal:host-gateway
+#    restart: unless-stopped
+#    networks:
+#      - dev
+#    labels:
+#      homepage.group: "Machine Learning"
+#      homepage.name: "OpenWebUI"
+#      homepage.icon: "si-openai"
+#      homepage.href: "http://localhost:8080"
 
   # MLFlow Tracking Server to track experiments for ML
   mlflow:
