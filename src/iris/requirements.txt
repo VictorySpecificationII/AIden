@@ -178,3 +178,4 @@ wrapt==1.17.2
 xxhash==3.5.0
 yarl==1.20.0
 zipp==3.22.0
+mistral_common==1.8.5
