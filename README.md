@@ -2,6 +2,11 @@
 
 Copilot, akin to Jarvis from Iron Man. A project inspired long before the GPT days. Uses OpenTelemetry for vendor-agnostic telemetry, forwarding metrics, logs, traces and spans to a collector.
 
+## Software Versions
+
+ - Python3: 3.10.12
+ - Venv: python3.10-venv
+ 
 ## Test
 
 To run the pytest suite, navigate to the root directory of the project and run 
@@ -21,7 +26,24 @@ pylint <path-to-file.py>
 
 ### Docker Compose
 
+#### First Time Setup
+
+Install the NVIDIA drivers for your card before running the commands below:
+
 ```bash
+chmod +x ./bootstrap/nvidia-cuda-toolkit.sh
+bash ./bootstrap/nvidia-cuda-toolkit.sh
+chmod +x ./bootstrap/nvidia-container-runtime.sh
+bash ./bootstrap/nvidia-container-runtime.sh
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+
+```
+
+#### Subsequently
+```bash
+
+
 docker-compose up -d
 ```
 ## Integrating your implementation with monitoring
@@ -37,3 +59,4 @@ The deployment includes Homepage, an application dashboard. To make use of it:
 http://localhost:8092
 ```
 The dashboard performs service auto-discovery so if you add a service to the stack, and label it the same way the other services are, it will show up in the dashboard automagically.
+

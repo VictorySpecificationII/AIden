@@ -1,12 +1,15 @@
-# aiden_api.py
-
 import logging
 import time
 import psutil
-import requests
+from datetime import datetime, timezone
+from typing import Any, Dict
 
-# third-party imports
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Depends, Security
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from pydantic import BaseModel
+
+# OpenTelemetry imports
 from opentelemetry import trace, metrics
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.trace import TracerProvider
@@ -22,16 +25,49 @@ from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.metrics import Observation
 
+# --- Tool Server Models ---
+class DateResponse(BaseModel):
+    date: str
+
+class TimeSimpleResponse(BaseModel):
+    time: str
+
+class TimeISOResponse(BaseModel):
+    time_iso: str
+
+class ErrorResponse(BaseModel):
+    error: str
+
+# --- Tools class ---
+class Tools:
+    class Valves(BaseModel):
+        pass
+
+    class UserValves(BaseModel):
+        pass
+
+    def __init__(self):
+        self.valves = self.Valves()
+        self.user_valves = self.UserValves()
+
+    def get_current_date(self) -> str:
+        current_date = datetime.now().strftime("%A, %B %d, %Y")
+        return f"Today's date is {current_date}"
+
+    def get_current_time(self) -> str:
+        current_time = datetime.now().strftime("%H:%M:%S")
+        return f"Current Time: {current_time}"
+
 # --- OpenTelemetry Setup ---
 def configure_telemetry(service_name: str = "aiden-api"):
     resource = Resource.create({"service.name": service_name})
-    
+
     # Tracing
     trace.set_tracer_provider(TracerProvider(resource=resource))
     tracer_provider = trace.get_tracer_provider()
     trace_exporter = OTLPSpanExporter(endpoint="http://otel-collector:4317")
     tracer_provider.add_span_processor(BatchSpanProcessor(trace_exporter))
-    
+
     # Logging
     logger_provider = LoggerProvider(resource=resource)
     set_logger_provider(logger_provider)
@@ -40,7 +76,7 @@ def configure_telemetry(service_name: str = "aiden-api"):
     handler = LoggingHandler(level=logging.DEBUG, logger_provider=logger_provider)
     logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.DEBUG)
-    
+
     # Metrics
     metric_exporter = OTLPMetricExporter(endpoint="http://otel-collector:4317")
     metric_reader = PeriodicExportingMetricReader(metric_exporter, export_interval_millis=20000)
@@ -92,15 +128,43 @@ def create_metrics(meter):
 
     return latency_histogram, request_counter, error_counter
 
-# --- App and Middleware ---
+# --- Init telemetry ---
 telemetry = configure_telemetry()
 logger = telemetry["logger"]
 meter = telemetry["meter"]
 tracer = telemetry["tracer"]
 latency_histogram, request_counter, error_counter = create_metrics(meter)
 
-app = FastAPI()
+tools = Tools()
+
+# --- FastAPI Tool Server ---
+app = FastAPI(
+    title="Aiden Tool Server",
+    description="A collection of utility tools exposed via OpenAPI, with integrated telemetry and observability.",
+    version="1.0.0",
+    contact={
+        "name": "IntellectualPlayspace",
+        "url": "https://intellectualplay.space",
+        "email": "andrew@intellectualplay.space",
+    }
+)
+
 FastAPIInstrumentor.instrument_app(app)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- Auth (Allow all bearer tokens) ---
+auth_scheme = HTTPBearer()
+
+def allow_all_tokens(auth: HTTPAuthorizationCredentials = Security(auth_scheme)):
+    # No validation – accept any bearer token
+    return auth.credentials
 
 @app.middleware("http")
 async def telemetry_middleware(request: Request, call_next):
@@ -120,20 +184,43 @@ async def telemetry_middleware(request: Request, call_next):
             logger.info("Request completed: %s", request.url)
             return response
 
-# --- Routes ---
-@app.get('/')
-def home():
-    return {"Chat": "Bot"}
+# --- Tool Endpoints ---
 
-@app.get('/ask')
-def ask(prompt: str):
-    try:
-        res = requests.post('http://ollama-cpu:11434/api/generate', json={
-            "prompt": prompt,
-            "stream": False,
-            "model": "smollm:135m"
-        })
-        return Response(content=res.text, media_type="application/json")
-    except requests.exceptions.RequestException as e:
-        logger.error("Failed to contact model backend: %s", str(e))
-        raise
+@app.get("/tool/get_date", response_model=DateResponse)
+def get_date(token: str = Depends(allow_all_tokens)):
+    with tracer.start_as_current_span("tool.get_current_date"):
+        date_str = tools.get_current_date().replace("Today's date is ", "")
+        return {"date": date_str}
+
+@app.get("/tool/get_time_simple", response_model=TimeSimpleResponse)
+def get_time_simple(token: str = Depends(allow_all_tokens)):
+    with tracer.start_as_current_span("tool.get_current_time_simple"):
+        time_str = tools.get_current_time().replace("Current Time: ", "")
+        return {"time": time_str}
+
+@app.get("/tool/get_time", response_model=TimeISOResponse)
+def get_time(iso: bool = True, token: str = Depends(allow_all_tokens)):
+    with tracer.start_as_current_span("tool.get_current_time"):
+        if iso:
+            now = datetime.now(timezone.utc).astimezone()
+            return {"time_iso": now.isoformat()}
+        return {"time_iso": datetime.now().isoformat()}
+
+# --- Tool Discovery ---
+
+@app.get("/tools", response_model=Dict[str, str])
+def list_tools():
+    return {
+        "get_date": "Return today's date",
+        "get_time_simple": "Return the current time in HH:MM:SS",
+        "get_time": "Return current time in ISO 8601 format",
+    }
+
+@app.get("/", include_in_schema=False)
+def root():
+    return {
+        "API Docs": "/docs",
+        "Redoc": "/redoc",
+        "OpenAPI Spec": "/openapi.json",
+        "Tools": "/tools"
+    }

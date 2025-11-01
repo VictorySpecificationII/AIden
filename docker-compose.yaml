@@ -16,6 +16,19 @@ services:
       - ./tools/sre/opentelemetry/otel-collector-config.yaml:/etc/otel-collector-config.yaml
 
 
+  dcgm-exporter:
+    image: nvcr.io/nvidia/k8s/dcgm-exporter:4.1.1-4.0.4-ubuntu22.04
+    container_name: dcgm-exporter
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    ports:
+      - "9400:9400"  # Prometheus will scrape metrics from here
+    command: ["dcgm-exporter"]
+    networks:
+      - dev
+
+
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
@@ -183,7 +196,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock # (optional) For docker integrations
       - ./tools/sre/homepage/background:/app/public/images
     environment:
-      HOMEPAGE_ALLOWED_HOSTS: localhost:8092 # required, may need port. See gethomepage.dev/installation/#homepage_allowed_hosts
+      HOMEPAGE_ALLOWED_HOSTS: "*" # required, may need port. See gethomepage.dev/installation/#homepage_allowed_hosts
     networks:
       - dev
 
@@ -191,6 +204,7 @@ services:
     build:
       context: ./src/aiden
       dockerfile: Dockerfile
+    image: intellectualplayspace/aiden
     container_name: AIden
     ports:
       - 8000:8000
@@ -202,24 +216,8 @@ services:
       homepage.icon: "docker"
       homepage.href: "http://localhost:8000"
 
-  ollama-cpu:
-    image: ollama/ollama
-    container_name: ollama-cpu
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-data-cpu:/root/.ollama
-    restart: always
-    networks:
-      - dev
-    labels:
-      homepage.group: "Machine Learning"
-      homepage.name: "Ollama | CPU Mode"
-      homepage.icon: "docker"
-      homepage.href: "http://localhost:11434"
-
   qdrant:
-    image: qdrant/qdrant:v1.14.0
+    image: qdrant/qdrant:latest
     container_name: qdrant
     ports:
       - "6333:6333"
@@ -231,27 +229,65 @@ services:
     labels:
       homepage.group: "Storage"
       homepage.name: "Qdrant"
-      homepage.icon: "docker"
+      homepage.icon: "si-knowledgebase"
       homepage.href: "http://localhost:6333/dashboard"
 
-  # ollama-gpu:
-  #   image: ollama/ollama
-  #   container_name: ollama-gpu
-  #   ports:
-  #     - "11434:11434"
-  #   volumes:
-  #     - ollama-data:/root/.ollama
-  #   runtime: nvidia
-  #   environment:
-  #     - NVIDIA_VISIBLE_DEVICES=all
-  #   restart: always
-  #   networks:
-  #     - dev
-  #   labels:
-  #     homepage.group: "Machine Learning"
-  #     homepage.name: "Ollama | GPU Mode"
-  #     homepage.icon: "code"
-  #     homepage.href: "http://localhost:11434"
+
+  ollama:
+    volumes:
+      - ollama-data-gpu:/root/.ollama
+    container_name: ollama
+    pull_policy: always
+    tty: true
+    restart: unless-stopped
+    image: docker.io/ollama/ollama:latest
+    ports:
+      - 11434:11434
+    environment:
+      - OLLAMA_KEEP_ALIVE=24h
+    networks:
+      - dev
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all 
+              capabilities: [gpu]
+    labels:
+      homepage.group: "Machine Learning"
+      homepage.name: "Ollama"
+      homepage.icon: "si-ollama"
+      homepage.href: "http://localhost:11434"
+
+  ollama-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: ollama-webui
+#    runtime: nvidia
+    volumes:
+      - ollama-data-webui:/app/backend/data
+    depends_on:
+      - ollama
+    ports:
+      - 8080:8080
+    environment:
+      - OLLAMA_BASE_URLS=http://host.docker.internal:11434
+      - ENV=dev
+      - WEBUI_AUTH=False
+      - WEBUI_NAME=valiantlynx AI
+      - WEBUI_URL=http://localhost:8080
+      - WEBUI_SECRET_KEY=t0p-s3cr3t
+#      - RAG_EMBEDDING_MODEL_DEVICE_TYPE=cuda
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    restart: unless-stopped
+    networks:
+      - dev
+    labels:
+      homepage.group: "Machine Learning"
+      homepage.name: "OpenWebUI"
+      homepage.icon: "si-openai"
+      homepage.href: "http://localhost:8080"
 
   # MLFlow Tracking Server to track experiments for ML
   mlflow:
@@ -259,7 +295,7 @@ services:
     build:
       context: .
       dockerfile: ./tools/mlops/mlflow/Dockerfile
-    image: mlflow/mlflow:latest  # Use the custom image name here
+    image: intellectualplayspace/mlflow  # Use the custom image name here
     container_name: mlflow
     depends_on:
       - postgres
@@ -278,7 +314,7 @@ services:
       --backend-store-uri postgresql://postgres:postgres@postgres:5432/postgres
       --host 0.0.0.0
       --serve-artifacts
-      --artifacts-destination minio://mlflow
+      --artifacts-destination s3://mlflow
     healthcheck:
       test: ["CMD", "curl", "-f", "http://mlflow:5000/"]
       interval: 30s
@@ -287,7 +323,7 @@ services:
     labels:
       homepage.group: "Machine Learning"
       homepage.name: "MLFlow"
-      homepage.icon: "docker"
+      homepage.icon: "si-mlflow"
       homepage.href: "http://localhost:5000"
 
 
@@ -317,7 +353,7 @@ services:
   # S3 storage for MLFlow
   minio:
     restart: always
-    image: minio/minio:latest
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z #LAST VERSION BEFORE THEY RUINED MINIO, DON'T CHANGE
     container_name: minio
     volumes:
       - minio-data:/data
@@ -346,34 +382,23 @@ services:
       homepage.icon: "minio"
       homepage.href: "http://localhost:9001"
 
-  # job_create_s3_bucket:
-  #   container_name: job_create_bucket
-  #   image: minio/mc
-  #   depends_on:
-  #     - minio
-  #   networks:
-  #     - dev
-  #   entrypoint: >
-  #     /bin/sh -c "
-  #     /usr/bin/mc alias set s3minio http://minio:9000 minioadmin minioadmin;
-  #     /usr/bin/mc mb s3minio/mlflow;
-  #     /usr/bin/mc policy set public s3minio/mlflow;
-  #     exit 0;
-  #     "
 
-  # job_create_s3_accesskey:
-  #   container_name: job_create_accesskey
-  #   image: minio/mc
-  #   depends_on:
-  #     - minio
-  #   networks:
-  #     - dev
-  #   entrypoint: >
-  #     /bin/sh -c "
-  #     /usr/bin/mc alias set s3minio http://minio:9000 minioadmin minioadmin;
-  #     /usr/bin/mc admin user svcacct add --access-key "definitelyinsecure" --secret-key "notsosecretisitnow" --name mlflow --description connection s3minio minioadmin;
-  #     exit 0;
-  #     "
+  minio_init:
+    container_name: minio_init_container
+    image: minio/mc
+    depends_on:
+      - minio
+    networks:
+      - dev
+    entrypoint: >
+      /bin/sh -c "
+      sleep 30s;
+      /usr/bin/mc alias set s3minio http://minio:9000 minioadmin minioadmin;
+      /usr/bin/mc admin user svcacct add --access-key "definitelyinsecure" --secret-key "notsosecretisitnow" --name mlflow --description connection s3minio minioadmin;
+      /usr/bin/mc mb s3minio/mlflow;
+      /usr/bin/mc policy set public s3minio/mlflow;
+      exit 0;
+      "
 
 networks:
   dev:
@@ -386,6 +411,6 @@ volumes:
   alertmanager-data:
   minio-data:
   postgres-data:
-  ollama-data-cpu:
   ollama-data-gpu:
+  ollama-data-webui:
   qdrant-data:

@@ -9,8 +9,9 @@ receivers:
 
 # Exporters: These define where the collected data will be sent.
 exporters:
-  logging:
-    loglevel: debug # The logging exporter outputs data to the console with a log level of debug.
+  debug:
+    verbosity: detailed
+
 
   prometheus:
     endpoint: "0.0.0.0:8889" # collector exposes metrics on this port, localhost:8889/metrics to see
@@ -38,16 +39,16 @@ service:
             # processed and then exported to the logging and logstash (ELK) exporters.
             receivers: [otlp]
             processors: [batch]
-            exporters: [logging, otlphttp/logstash]
+            exporters: [debug, otlphttp/logstash]
         traces:
             # For traces, data received on 0.0.0.0:4317 is processed and then 
             # exported to the logging and Jaeger exporters.
             receivers: [otlp]
             processors: [batch]
-            exporters: [logging, otlp/jaeger]
+            exporters: [debug, otlp/jaeger]
         metrics:
             # For metrics, data received on 0.0.0.0:4317 is processed and then 
             # exported to both logging and prometheus exporters.
             receivers: [otlp]
             processors: [batch]
-            exporters: [logging, prometheus]
+            exporters: [debug, prometheus]
