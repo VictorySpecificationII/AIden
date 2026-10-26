@@ -113,6 +113,8 @@ def configure_telemetry(service_name: str = "aiden-api"):
     handler = LoggingHandler(level=logging.DEBUG, logger_provider=logger_provider)
     logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.DEBUG)
+    # urllib3 logs every outbound HTTP call at DEBUG, burying AIden's own log lines
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
 
     # Metrics
     metric_exporter = OTLPMetricExporter(endpoint="http://otel-collector:4317")

@@ -96,8 +96,29 @@ services:
       homepage.href: "http://localhost:16686"
 
 
+  # Logs: OTel SDK -> collector -> Loki (OTLP). Grafana queries it; trace_id links to Jaeger.
+  loki:
+    image: grafana/loki:3.7.8
+    container_name: loki
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    volumes:
+      - ./tools/sre/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      # /loki is owned by the image's loki user, so the new volume inherits it
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    networks:
+      - dev
+    labels:
+      homepage.group: "Observability"
+      homepage.name: "Loki"
+      homepage.icon: "loki"
+      homepage.href: "http://localhost:3000/explore"
+
   # Elasticsearch service
   elasticsearch:
+    profiles: [elk]  # optional: logs now go to Loki
     image: docker.elastic.co/elasticsearch/elasticsearch:8.7.0
     container_name: elasticsearch
     environment:
@@ -122,6 +143,7 @@ services:
       - otel-collector
 
   logstash:
+    profiles: [elk]  # optional: logs now go to Loki
     image: docker.elastic.co/logstash/logstash:8.7.0
     container_name: logstash
     networks:
@@ -143,6 +165,7 @@ services:
       - elasticsearch
 
   kibana:
+    profiles: [elk]  # optional: logs now go to Loki
     image: docker.elastic.co/kibana/kibana:8.7.0
     container_name: kibana
     depends_on:
@@ -629,3 +652,4 @@ volumes:
   ollama-data-webui:
   qdrant-data:
   ovms-data:
+  loki-data:

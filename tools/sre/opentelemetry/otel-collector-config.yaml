@@ -9,23 +9,24 @@ receivers:
 
 # Exporters: These define where the collected data will be sent.
 exporters:
+  # debug (verbosity: detailed) printed every log, span and metric to stdout; re-add
+  # it to a pipeline when troubleshooting the collector itself
   debug:
-    verbosity: detailed
+    verbosity: basic
 
 
   prometheus:
     endpoint: "0.0.0.0:8889" # collector exposes metrics on this port, localhost:8889/metrics to see
 
-  otlp/jaeger:
+  otlp_grpc/jaeger:
     endpoint: "jaeger:4320"
     tls:
       insecure: true
 
-  otlphttp/logstash:
-    endpoint: "http://logstash:5045/v1/logs"  # Correct HTTP endpoint for Logstash
-    encoding: json
-    headers:
-      Content-Type: "application/json"
+  # Logs go to Loki's native OTLP endpoint (one entry per log line, with level,
+  # trace_id and span_id). Logstash/Elasticsearch are behind the optional elk profile.
+  otlp_http/loki:
+    endpoint: "http://loki:3100/otlp"
 
 # Processors: These are used to process data between receiving and exporting. 
 processors:
@@ -35,20 +36,20 @@ processors:
 service:
     pipelines:
         logs:
-            # For logs, data received on 0.0.0.0:4317 (via the otlp receiver) is 
-            # processed and then exported to the logging and logstash (ELK) exporters.
+            # For logs, data received on 0.0.0.0:4317 (via the otlp receiver) is
+            # processed and then exported to Loki.
             receivers: [otlp]
             processors: [batch]
-            exporters: [debug, otlphttp/logstash]
+            exporters: [otlp_http/loki]
         traces:
             # For traces, data received on 0.0.0.0:4317 is processed and then 
             # exported to the logging and Jaeger exporters.
             receivers: [otlp]
             processors: [batch]
-            exporters: [debug, otlp/jaeger]
+            exporters: [otlp_grpc/jaeger]
         metrics:
             # For metrics, data received on 0.0.0.0:4317 is processed and then 
             # exported to both logging and prometheus exporters.
             receivers: [otlp]
             processors: [batch]
-            exporters: [debug, prometheus]
+            exporters: [prometheus]

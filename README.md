@@ -16,7 +16,7 @@ AIden runs as a composed platform of services providing:
 - Vector search and embedding storage (Qdrant)
 - Experiment tracking and artifact storage (MLflow + Postgres + MinIO)
 - Observability and telemetry (OpenTelemetry Collector, Prometheus, Grafana, Jaeger)
-- Log aggregation (Elasticsearch, Logstash, Kibana)
+- Log aggregation (Loki; Elasticsearch/Logstash/Kibana optional via the `elk` profile)
 - GPU telemetry (NVIDIA DCGM exporter)
 - Web interface for interaction (OpenWebUI)
 - Unified service dashboard (Homepage)
@@ -24,7 +24,7 @@ AIden runs as a composed platform of services providing:
 Telemetry pipeline:
 
 ```bash
-Application → OpenTelemetry Collector → Prometheus / Jaeger / Elasticsearch → Grafana / Kibana
+Application → OpenTelemetry Collector → Prometheus (metrics) / Jaeger (traces) / Loki (logs) → Grafana
 ```
 
 
@@ -66,7 +66,8 @@ The platform mirrors patterns commonly used in production AI infrastructure envi
 - Prometheus
 - Grafana
 - Jaeger
-- Elasticsearch / Logstash / Kibana (ELK stack)
+- Loki (logs, linked to traces in Grafana)
+- Elasticsearch / Logstash / Kibana (optional, `elk` profile; no longer in the log path)
 - NVIDIA DCGM Exporter (GPU telemetry)
 
 ### Platform UX
@@ -176,8 +177,8 @@ Telemetry is then forwarded to:
 
 - Prometheus (metrics)
 - Jaeger (traces)
-- Elasticsearch (logs)
-- Grafana / Kibana (visualization)
+- Loki (logs)
+- Grafana (visualization; log lines link to their trace in Jaeger and back)
 
 ---
 
@@ -193,7 +194,8 @@ Key Interfaces:
  - Grafana: http://localhost:3000
  - Prometheus: http://localhost:9090
  - Jaeger: http://localhost:16686
- - Kibana: http://localhost:5601
+ - Loki (via Grafana Explore): http://localhost:3000/explore
+ - Kibana (only with the `elk` profile): http://localhost:5601
  - OpenWebUI: http://localhost:8080
  - MLFlow: http://localhost:5000
  - MinIO: http://localhost:9001

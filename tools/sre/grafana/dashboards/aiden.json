@@ -652,8 +652,8 @@
     },
     {
       "datasource": {
-        "type": "elasticsearch",
-        "uid": "${DS_ELASTICSEARCH}"
+        "type": "loki",
+        "uid": "loki"
       },
       "gridPos": {
         "h": 8,
@@ -675,24 +675,13 @@
       "pluginVersion": "11.1.4",
       "targets": [
         {
-          "alias": "",
-          "bucketAggs": [],
-          "datasource": {
-            "type": "elasticsearch",
-            "uid": "${DS_ELASTICSEARCH}"
-          },
-          "metrics": [
-            {
-              "id": "1",
-              "settings": {
-                "limit": "500"
-              },
-              "type": "logs"
-            }
-          ],
-          "query": "",
           "refId": "A",
-          "timeField": "@timestamp"
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service_name=\"aiden-api\"}",
+          "queryType": "range"
         }
       ],
       "title": "Logs",
@@ -701,7 +690,11 @@
   ],
   "refresh": "5s",
   "schemaVersion": 39,
-  "tags": ["aiden", "service", "tool-server"],
+  "tags": [
+    "aiden",
+    "service",
+    "tool-server"
+  ],
   "templating": {
     "list": [
       {
@@ -739,25 +732,6 @@
         "queryValue": "",
         "refresh": 1,
         "regex": "Jaeger",
-        "skipUrlSync": false,
-        "type": "datasource"
-      },
-      {
-        "current": {
-          "selected": false,
-          "text": "Elasticsearch",
-          "value": "elasticsearch"
-        },
-        "hide": 0,
-        "includeAll": false,
-        "label": "Logs Datasource",
-        "multi": false,
-        "name": "DS_ELASTICSEARCH",
-        "options": [],
-        "query": "elasticsearch",
-        "queryValue": "",
-        "refresh": 1,
-        "regex": "Elasticsearch",
         "skipUrlSync": false,
         "type": "datasource"
       }
