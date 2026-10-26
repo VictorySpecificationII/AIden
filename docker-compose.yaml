@@ -298,6 +298,12 @@ services:
       - WEBUI_NAME=valiantlynx AI
       - WEBUI_URL=http://localhost:8080
       - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:?}
+      # .env is the source of truth: without this, settings saved on first start
+      # override env changes (e.g. adding a backend later)
+      - ENABLE_PERSISTENT_CONFIG=False
+      # Extra OpenAI-compatible backends (e.g. OVMS on the NPU); may be empty
+      - OPENAI_API_BASE_URLS=${OPENWEBUI_OPENAI_API_BASE_URLS?}
+      - OPENAI_API_KEYS=${OPENWEBUI_OPENAI_API_KEYS?}
 #      - RAG_EMBEDDING_MODEL_DEVICE_TYPE=cuda
     extra_hosts:
       - host.docker.internal:host-gateway
@@ -309,6 +315,62 @@ services:
       homepage.name: "OpenWebUI"
       homepage.icon: "si-openai"
       homepage.href: "http://localhost:8080"
+
+  # LLM serving on the Intel NPU (OpenAI-compatible API at /v3). The first start
+  # downloads the model and compiles it for the NPU, which takes several minutes;
+  # the compiled blob is cached in the volume.
+  ovms-npu:
+    profiles: [npu]
+    image: openvino/model_server:2026.4.1-gpu  # -gpu images include the NPU driver
+    container_name: ovms-npu
+    restart: unless-stopped
+    command: >
+      --source_model ${OVMS_NPU_MODEL:?}
+      --model_name ${OVMS_NPU_MODEL_NAME:?}
+      --model_repository_path /home/ovms/models
+      --cache_dir /home/ovms/models/.ov_cache
+      --target_device NPU
+      --task text_generation
+      --max_prompt_len 2000
+      --rest_port 8001
+    devices:
+      - /dev/accel:/dev/accel
+    group_add:
+      - "${RENDER_GID:?}"
+    volumes:
+      # Mounted on the ovms user's home so the new volume inherits its ownership
+      - ovms-data:/home/ovms
+    ports:
+      - "8001:8001"
+    networks:
+      - dev
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/v2/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30m
+    labels:
+      homepage.group: "Machine Learning"
+      homepage.name: "OVMS (NPU)"
+      homepage.icon: "si-intel"
+      homepage.href: "http://localhost:8001/v3/models"
+
+  npu-exporter:
+    profiles: [npu]
+    image: python:3.12.7-slim
+    container_name: npu-exporter
+    restart: unless-stopped
+    command: ["python", "/app/npu_exporter.py"]
+    volumes:
+      - ./tools/sre/npu-exporter/npu_exporter.py:/app/npu_exporter.py:ro
+      - /sys:/host/sys:ro
+    networks:
+      - dev
+    labels:
+      prometheus.scrape: "true"
+      prometheus.port: "9101"
+      prometheus.job: "npu-exporter"
 
   # MLFlow Tracking Server to track experiments for ML
   mlflow:
@@ -445,3 +507,4 @@ volumes:
   ollama-data-gpu:
   ollama-data-webui:
   qdrant-data:
+  ovms-data:

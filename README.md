@@ -133,12 +133,15 @@ chmod 600 .env
 # edit .env: set COMPOSE_PROFILES and LLAMACPP_DIR, and replace the default credentials if needed
 ```
 
-`COMPOSE_PROFILES` selects the hardware profile for this machine:
+`COMPOSE_PROFILES` selects the hardware profiles for this machine. Pick one of `nvidia` / `cpu`, optionally combined with `npu` (e.g. `COMPOSE_PROFILES=cpu,npu`):
 
-| Profile | Ollama | NVIDIA services (DCGM exporter) |
-|---|---|---|
-| `nvidia` | on the NVIDIA GPU | yes |
-| `cpu` | on CPU | no |
+| Profile | Adds |
+|---|---|
+| `nvidia` | Ollama on the NVIDIA GPU, DCGM exporter |
+| `cpu` | Ollama on CPU |
+| `npu` | OVMS serving a small LLM on the Intel NPU (OpenAI-compatible API on port 8001), NPU exporter, Grafana "AIden's NPU" dashboard |
+
+With `npu`, set `OPENWEBUI_OPENAI_API_BASE_URLS=http://ovms-npu:8001/v3` and any non-empty `OPENWEBUI_OPENAI_API_KEYS` so OpenWebUI lists the NPU model. The first start downloads the model and compiles it for the NPU (several minutes); later starts use the cache.
 
 A profile can also be chosen per command, e.g. `docker compose --profile cpu up -d`.
 
