@@ -43,7 +43,8 @@ if $nvidia; then profiles+=(nvidia); else profiles+=(cpu); fi
 $npu && profiles+=(npu)
 $intel_gpu && profiles+=(intel-gpu)
 
-urls=(); keys=()
+# AIden themselves (the router) is always listed first in OpenWebUI
+urls=("http://aiden:8000/v1"); keys=(unused)
 $npu && { urls+=("http://ovms-npu:8001/v3"); keys+=(unused); }
 $intel_gpu && { urls+=("http://ovms-gpu:8002/v3"); keys+=(unused); }
 

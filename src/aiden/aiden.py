@@ -30,6 +30,7 @@ from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
 from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.view import ExplicitBucketHistogramAggregation, View
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 from opentelemetry.metrics import Observation
 
@@ -116,7 +117,14 @@ def configure_telemetry(service_name: str = "aiden-api"):
     # Metrics
     metric_exporter = OTLPMetricExporter(endpoint="http://otel-collector:4317")
     metric_reader = PeriodicExportingMetricReader(metric_exporter, export_interval_millis=20000)
-    meter_provider = MeterProvider(metric_readers=[metric_reader], resource=resource)
+    # Buckets sized for the router (the defaults start at 0-5 s, too coarse for a 150 ms search)
+    views = [
+        View(instrument_name="aiden_route_stage_latency", aggregation=ExplicitBucketHistogramAggregation(
+            boundaries=[0.05, 0.1, 0.25, 0.5, 1, 2, 4, 8, 15, 30, 60, 120])),
+        View(instrument_name="aiden_answer_tokens", aggregation=ExplicitBucketHistogramAggregation(
+            boundaries=[1, 2, 4, 6, 8, 10, 12, 15, 20, 30, 50])),
+    ]
+    meter_provider = MeterProvider(metric_readers=[metric_reader], resource=resource, views=views)
     metrics.set_meter_provider(meter_provider)
 
     return {
@@ -395,10 +403,42 @@ stage_histogram = meter.create_histogram(
     description="Latency of each routing stage",
     unit="s"
 )
+# The collector appends the unit, so this is exported as aiden_answer_tokens_per_second
 tokens_histogram = meter.create_histogram(
-    name="aiden_answer_tokens_per_second",
+    name="aiden_answer_tokens",
     description="Generation speed of the answering backend",
     unit="1/s"
+)
+
+fallback_counter = meter.create_counter(
+    name="aiden_route_fallbacks",
+    description="Answers that fell back to the next backend tier",
+    unit="1"
+)
+
+def vault_gauge(key: str):
+    def callback(_):
+        yield Observation(vault.status.get(key) or 0)
+    return callback
+
+def vault_chunks(_):
+    # Live count from Qdrant, so progress shows during the first (long) scan too
+    try:
+        yield Observation(vault.count_chunks())
+    except requests.RequestException:
+        return
+
+meter.create_observable_gauge(
+    name="aiden_vault_chunks",
+    callbacks=[vault_chunks],
+    description="Chunks in the vault index",
+    unit="{chunks}"
+)
+meter.create_observable_gauge(
+    name="aiden_vault_pending_notes",
+    callbacks=[vault_gauge("pending_notes")],
+    description="Notes still waiting to be (re)indexed in the current scan",
+    unit="{notes}"
 )
 
 @app.get("/v1/models")
@@ -443,7 +483,7 @@ def chat_completions(body: Dict[str, Any]):
             skipped.append(name)
             span.set_attribute("router.error", type(exc).__name__)
             span.end()
-            route_counter.add(1, {"fallback_from": name})
+            fallback_counter.add(1, {"from": name})
             logger.warning("Backend %s failed (%s), falling back", name, type(exc).__name__)
     if response is None:
         return JSONResponse(status_code=503, content={"error": {
