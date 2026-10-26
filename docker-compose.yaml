@@ -215,6 +215,9 @@ services:
       dockerfile: Dockerfile
     image: intellectualplayspace/aiden
     container_name: AIden
+    environment:
+      # Lets AIden report which profiles this machine runs (see /capabilities)
+      - AIDEN_PROFILES=${COMPOSE_PROFILES:?}
     ports:
       - 8000:8000
     networks:
