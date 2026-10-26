@@ -130,8 +130,17 @@ Credentials, endpoints and machine-specific paths are read from environment vari
 ```bash
 cp .env.example .env
 chmod 600 .env
-# edit .env: set LLAMACPP_DIR, and replace the default credentials if needed
+# edit .env: set COMPOSE_PROFILES and LLAMACPP_DIR, and replace the default credentials if needed
 ```
+
+`COMPOSE_PROFILES` selects the hardware profile for this machine:
+
+| Profile | Ollama | NVIDIA services (DCGM exporter) |
+|---|---|---|
+| `nvidia` | on the NVIDIA GPU | yes |
+| `cpu` | on CPU | no |
+
+A profile can also be chosen per command, e.g. `docker compose --profile cpu up -d`.
 
 ```bash
 docker compose up -d

@@ -17,6 +17,7 @@ services:
 
 
   dcgm-exporter:
+    profiles: [nvidia]
     image: nvcr.io/nvidia/k8s/dcgm-exporter:4.1.1-4.0.4-ubuntu22.04
     container_name: dcgm-exporter
     runtime: nvidia
@@ -234,6 +235,7 @@ services:
 
 
   ollama:
+    profiles: [nvidia]
     volumes:
       - ollama-data-gpu:/root/.ollama
     container_name: ollama
@@ -260,6 +262,12 @@ services:
       homepage.icon: "si-ollama"
       homepage.href: "http://localhost:11434"
 
+  # Same as ollama, without the NVIDIA GPU reservation (machines without an NVIDIA GPU)
+  ollama-cpu:
+    extends: ollama
+    profiles: !override [cpu]
+    deploy: !reset {}
+
   ollama-webui:
     image: ghcr.io/open-webui/open-webui:main
     container_name: ollama-webui
@@ -267,7 +275,12 @@ services:
     volumes:
       - ollama-data-webui:/app/backend/data
     depends_on:
-      - ollama
+      ollama:
+        condition: service_started
+        required: false
+      ollama-cpu:
+        condition: service_started
+        required: false
     ports:
       - 8080:8080
     environment:
