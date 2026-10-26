@@ -1445,7 +1445,7 @@
     "preload": false,
     "refresh": "",
     "schemaVersion": 41,
-    "tags": [],
+    "tags": ["aiden", "hardware", "nvidia"],
     "templating": {
       "list": [
         {

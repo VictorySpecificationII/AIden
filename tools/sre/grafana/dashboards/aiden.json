@@ -701,7 +701,7 @@
   ],
   "refresh": "5s",
   "schemaVersion": 39,
-  "tags": [],
+  "tags": ["aiden", "service", "tool-server"],
   "templating": {
     "list": [
       {

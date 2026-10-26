@@ -574,7 +574,7 @@
     }
   ],
   "schemaVersion": 39,
-  "tags": [],
+  "tags": ["aiden", "storage", "qdrant"],
   "templating": {
     "list": []
   },
