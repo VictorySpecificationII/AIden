@@ -128,6 +128,41 @@ def mentor_turn(messages: List[Dict[str, Any]], prompt: str, stream: bool):
         footer = f"\n\n*answered by Claude ({answer.get('model', 'mentor')}) via Claude Code, as my mentor*" if router.SHOW_ROUTE else ""
         return text_reply(answer["answer"] + footer, stream, {"backend": "mentor", "trigger": trigger, "draft_included": bool(draft)})
 
+task_counter = meter.create_counter(
+    name="aiden_background_tasks",
+    description="Chat-UI background tasks (titles, tags, follow-ups) that reached AIden",
+    unit="1"
+)
+
+def background_task_turn(body: Dict[str, Any], messages: List[Dict[str, Any]], task: str):
+    """A chat-UI background task (title, tags, follow-ups) that reached AIden: pass it to
+    the first available backend unchanged. No notes, no confidence line, no footers."""
+    stream = bool(body.get("stream"))
+    with tracer.start_as_current_span("router.background_task") as span:
+        span.set_attribute("router.task", task)
+        for name, base, model in router.candidate_backends(get_capabilities()):
+            start = time.time()
+            try:
+                response = router.backend_request(base, model, messages, stream, body, notes=[])
+            except requests.RequestException as exc:
+                logger.warning("Background task on %s failed (%s), trying the next tier", name, type(exc).__name__)
+                continue
+            span.set_attribute("router.backend", name)
+            task_counter.add(1, {"backend": name})
+
+            def finished(tokens: int, seconds: float, *_):
+                # Metadata only: task prompts embed the chat history, which turns already record
+                remember("task", {"trace_id": current_trace_id(), "task": task, "backend": name, "model": model,
+                                  "tokens": tokens, "seconds": round(seconds, 2)})
+
+            if stream:
+                return StreamingResponse(router.stream_answer(response, [], finished), media_type="text/event-stream")
+            result = response.json()
+            result["model"] = "aiden"
+            finished(result.get("usage", {}).get("completion_tokens", 0), time.time() - start)
+            return result
+    return JSONResponse(status_code=503, content={"error": {"message": "No local model is available right now.", "type": "unavailable"}})
+
 @api.get("/v1/models")
 def list_models():
     return {"object": "list", "data": [{"id": "aiden", "object": "model", "owned_by": "aiden"}]}
@@ -141,6 +176,9 @@ def chat_completions(body: Dict[str, Any]):
 
     # The trace explains each decision; it records the prompt's length, never its text
     trace.get_current_span().set_attribute("router.prompt_chars", len(prompt))
+    task = router.background_task(prompt)
+    if task:
+        return background_task_turn(body, messages, task)
     if mentor.wants_mentor(prompt):
         return mentor_turn(messages, prompt, bool(body.get("stream")))
 

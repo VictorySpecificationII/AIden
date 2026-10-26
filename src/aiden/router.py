@@ -54,6 +54,20 @@ NOTES_INSTRUCTION = (
     "rather than guessing."
 )
 
+# --- Background tasks from the chat UI ---------------------------------------
+
+# OpenWebUI asks the chat model for titles, tags and follow-up suggestions with prompts
+# that start like this. They're not the user talking to AIden: no notes, no confidence
+# line, no footers (the UI expects clean JSON back), and they're recorded apart.
+BACKGROUND_TASK = re.compile(r"^\s*###\s*Task:\s*(.*)")
+
+
+def background_task(prompt: str) -> Optional[str]:
+    """The task's one-line description if this is a UI background task, else None."""
+    match = BACKGROUND_TASK.match(prompt or "")
+    return (match.group(1).strip()[:80] or "unspecified") if match else None
+
+
 # --- Step 1: does this request need the user's notes? -------------------------
 
 NOTES_PATTERNS = [

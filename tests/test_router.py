@@ -211,3 +211,11 @@ def test_no_mentor_offer_when_not_allowed():
 def test_streamed_text_is_decoded_as_utf8():
     text, _, _ = relay(["Eu conheço a cidade, ", "Ελλάδα, café."])
     assert text == "Eu conheço a cidade, Ελλάδα, café."
+
+
+def test_ui_background_tasks_are_recognised():
+    # OpenWebUI puts the task description on the line after "### Task:"
+    assert router.background_task("### Task:\nGenerate a concise title for the chat") == "Generate a concise title for the chat"
+    assert router.background_task("### Task:") == "unspecified"
+    assert router.background_task("### Task: Suggest follow-ups") == "Suggest follow-ups"
+    assert router.background_task("What is a task in Linux?") is None

@@ -48,6 +48,13 @@ urls=("http://aiden:8000/v1"); keys=(unused)
 $npu && { urls+=("http://ovms-npu:8001/v3"); keys+=(unused); }
 $intel_gpu && { urls+=("http://ovms-gpu:8002/v3"); keys+=(unused); }
 
+# Background-task model for OpenWebUI (titles, tags, follow-ups): NPU model, else Intel
+# GPU model, else empty (AIden passes them through cleanly)
+env_value() { [ -f "$ENV_FILE" ] && grep -E "^$1=" "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '"' || true; }
+task_model=""
+if $npu; then task_model=$(env_value OVMS_NPU_MODEL_NAME)
+elif $intel_gpu; then task_model=$(env_value OVMS_GPU_MODEL_NAME); fi
+
 render_gid=""
 for dev in /dev/dri/renderD* /dev/accel/accel*; do
     [ -e "$dev" ] && { render_gid=$(stat -c %g "$dev"); break; }
@@ -73,6 +80,7 @@ FOUND=${FOUND:-no accelerators}
 echo "Detected:         ${FOUND//,/, }"
 echo "COMPOSE_PROFILES: $PROFILES"
 echo "OpenWebUI URLs:   ${URLS:-(none)}"
+echo "Task model:       ${task_model:-(AIden handles background tasks)}"
 echo "RENDER_GID:       ${render_gid:-(no render device)}"
 echo "DOCKER_GID:       ${docker_gid:-(no docker group)}"
 
@@ -122,6 +130,7 @@ EOF
 set_var COMPOSE_PROFILES "$PROFILES"
 set_var OPENWEBUI_OPENAI_API_BASE_URLS "$URLS"
 set_var OPENWEBUI_OPENAI_API_KEYS "$KEYS"
+set_var OPENWEBUI_TASK_MODEL "$task_model"
 [ -n "$render_gid" ] && set_var RENDER_GID "$render_gid"
 [ -n "$docker_gid" ] && set_var DOCKER_GID "$docker_gid"
 

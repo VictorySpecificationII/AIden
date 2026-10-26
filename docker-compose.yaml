@@ -341,6 +341,9 @@ services:
       # .env is the source of truth: without this, settings saved on first start
       # override env changes (e.g. adding a backend later)
       - ENABLE_PERSISTENT_CONFIG=False
+      # Model for background tasks (titles, tags, follow-ups) while chatting with AIden;
+      # empty = AIden itself, which passes them through cleanly (see chat_api.py)
+      - TASK_MODEL_EXTERNAL=${OPENWEBUI_TASK_MODEL:-}
       # Extra OpenAI-compatible backends (e.g. OVMS on the NPU); may be empty
       - OPENAI_API_BASE_URLS=${OPENWEBUI_OPENAI_API_BASE_URLS?}
       - OPENAI_API_KEYS=${OPENWEBUI_OPENAI_API_KEYS?}
