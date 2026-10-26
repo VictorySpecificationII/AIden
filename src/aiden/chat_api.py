@@ -82,8 +82,18 @@ def mentor_turn(messages: List[Dict[str, Any]], prompt: str, stream: bool):
             logger.info("Mentor not asked: question is about the user's notes (%s)", reason)
             return text_reply("Claude can't see your notes, so I can't pass this one on as it is. If you rephrase "
                               "it as a general question, without your private details, I'll ask.", stream)
+        # The draft goes along only if it doesn't resemble the user's notes; the closest notes
+        # are also handed to check_outbound so the guard can compare against them
+        closest = []
+        if draft:
+            safe, why, closest = mentor.draft_privacy(draft)
+            span.set_attribute("mentor.draft_check", why)
+            if not safe:
+                draft = ""
+                span.set_attribute("mentor.draft_included", False)
+                logger.info("Mentor draft withheld: %s", why)
         try:
-            answer = mentor.ask_mentor(question, draft, notes=[])
+            answer = mentor.ask_mentor(question, draft, notes=closest)
         except (requests.RequestException, RuntimeError, ValueError, PermissionError) as exc:
             span.set_attribute("mentor.outcome", "failed")
             span.set_attribute("mentor.error", str(exc)[:200])

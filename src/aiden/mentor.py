@@ -9,9 +9,14 @@ from typing import Any, Dict, List, Tuple
 import requests
 
 import router
+import vault
 
 MENTOR_URL = os.environ.get("MENTOR_URL", "http://mentor-bridge:8765")
 MENTOR_TOKEN = os.environ.get("MENTOR_TOKEN", "")
+# A draft that resembles the user's notes this closely stays local (measured: answers
+# drawn from notes score ~0.77 against the vault, general answers ~0.5-0.63)
+DRAFT_MAX_NOTE_SCORE = float(os.environ.get("AIDEN_DRAFT_MAX_NOTE_SCORE", "0.65"))
+SHINGLE_WORDS = 8
 
 MENTOR_TRIGGERS = [
     r"\b(ask|check with|ask your|ask the) (claude|mentor)\b",
@@ -53,6 +58,29 @@ def mentor_question(messages: List[Dict[str, Any]], prompt: str) -> Tuple[str, s
         question = users[-2].get("content", "") if isinstance(users[-2].get("content"), str) else ""
         draft = "" if "\n\nSources:" in previous_answer else strip_footers(previous_answer)
     return question, draft, router.MENTOR_OFFER[:30] in previous_answer
+
+
+def shingles(text: str, size: int = SHINGLE_WORDS) -> set:
+    words = re.findall(r"\w+", text.lower())
+    return {tuple(words[i:i + size]) for i in range(len(words) - size + 1)}
+
+
+def draft_privacy(draft: str) -> Tuple[bool, str, List[Dict[str, Any]]]:
+    """(safe to send, why, closest notes). Judges the draft itself, not the question, so an
+    answer that drew on the user's notes stays local even if the turn that produced it
+    can't be reconstructed. Fails closed: if the vault can't be searched, it isn't safe."""
+    try:
+        matches = vault.search(draft[:2000], limit=5)
+    except (requests.RequestException, KeyError, ValueError) as exc:
+        return False, f"vault search failed ({type(exc).__name__})", []
+    top = max((m["score"] for m in matches), default=0.0)
+    if top >= DRAFT_MAX_NOTE_SCORE:
+        return False, f"resembles the user's notes (score {top:.2f} >= {DRAFT_MAX_NOTE_SCORE})", matches
+    draft_shingles = shingles(draft)
+    for match in matches:
+        if draft_shingles & shingles(match["text"]):
+            return False, f"shares {SHINGLE_WORDS}-word wording with {match['path']}", matches
+    return True, f"no close match in the vault (top score {top:.2f})", matches
 
 
 def ask_mentor(question: str, draft: str, notes: List[Dict[str, Any]]) -> Dict[str, Any]:
