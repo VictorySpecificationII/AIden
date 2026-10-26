@@ -28,6 +28,10 @@ services:
     command: ["dcgm-exporter"]
     networks:
       - dev
+    labels:
+      prometheus.scrape: "true"
+      prometheus.port: "9400"
+      prometheus.job: "dcgm-exporter"
 
 
   prometheus:
@@ -39,6 +43,10 @@ services:
       - "9090:9090"     # Prometheus web interface
     volumes:
       - ./tools/sre/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      # Docker service discovery for profile-dependent exporters (see prometheus.yml)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    group_add:
+      - "${DOCKER_GID:?}"
     depends_on:
       - otel-collector
     labels:
