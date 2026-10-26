@@ -130,6 +130,7 @@ Credentials, endpoints and machine-specific paths are read from environment vari
 ```bash
 cp .env.example .env
 chmod 600 .env
+bootstrap/detect-profiles.sh   # detects GPUs/NPU and sets the profiles; --dry-run to only report
 # edit .env: set COMPOSE_PROFILES and LLAMACPP_DIR, and replace the default credentials if needed
 ```
 
