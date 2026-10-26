@@ -364,6 +364,68 @@ services:
       prometheus.port: "8001"
       prometheus.job: "ovms-npu"
 
+  # Text embeddings for vault search (OpenAI-compatible /v3/embeddings), split by task:
+  # - ovms-cpu-embed (always on, alias ovms-embed-query): search queries; short inputs
+  #   take ~35 ms on CPU vs ~1 s on the NPU, which pads every input to max_length
+  # - ovms-npu-embed (npu profile, alias ovms-embed-index): background vault indexing,
+  #   which keeps the CPU free; without an NPU, AIden indexes via ovms-embed-query
+  # Both serve the same model, so their vectors are comparable.
+  ovms-cpu-embed:
+    image: openvino/model_server:2026.4.1-gpu
+    container_name: ovms-cpu-embed
+    restart: unless-stopped
+    command: >
+      --source_model ${OVMS_EMBED_MODEL:?}
+      --model_name ${OVMS_EMBED_MODEL_NAME:?}
+      --model_repository_path /home/ovms/models
+      --cache_dir /home/ovms/models/.ov_cache
+      --target_device CPU
+      --task embeddings
+      --pooling LAST
+      --rest_port 8003
+    volumes:
+      - ovms-data:/home/ovms
+    networks:
+      dev:
+        aliases: [ovms-embed-query]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/v2/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30m
+
+  ovms-npu-embed:
+    profiles: [npu]
+    image: openvino/model_server:2026.4.1-gpu
+    container_name: ovms-npu-embed
+    restart: unless-stopped
+    command: >
+      --source_model ${OVMS_EMBED_MODEL:?}
+      --model_name ${OVMS_EMBED_MODEL_NAME:?}
+      --model_repository_path /home/ovms/models
+      --cache_dir /home/ovms/models/.ov_cache
+      --target_device NPU
+      --task embeddings
+      --pooling LAST
+      --max_length 1000
+      --rest_port 8003
+    devices:
+      - /dev/accel:/dev/accel
+    group_add:
+      - "${RENDER_GID:?}"
+    volumes:
+      - ovms-data:/home/ovms
+    networks:
+      dev:
+        aliases: [ovms-embed-index]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/v2/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30m
+
   # LLM serving on an Intel GPU (Arc / iGPU), same image as ovms-npu. OpenAI-compatible
   # API at /v3. Shares the ovms-data volume (model downloads and compile cache).
   ovms-gpu:
