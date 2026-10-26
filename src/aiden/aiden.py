@@ -10,9 +10,11 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, Request, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
+import router
 import vault
 
 # OpenTelemetry imports
@@ -320,15 +322,19 @@ async def telemetry_middleware(request: Request, call_next):
         logger.info("Handling request %s", request.url)
         try:
             response = await call_next(request)
+        except Exception:
+            # Don't swallow it (a return in finally did, leaving clients hanging): log, count, re-raise
+            error_counter.add(1)
+            logger.exception("Unhandled error while handling %s", request.url)
+            raise
         finally:
-            end = time.time()
-            latency_histogram.record(end - start)
+            latency_histogram.record(time.time() - start)
             request_counter.add(1)
-            if response and response.status_code >= 400:
-                error_counter.add(1)
-                logger.error("Error response from %s: %d", request.url, response.status_code)
-            logger.info("Request completed: %s", request.url)
-            return response
+        if response.status_code >= 400:
+            error_counter.add(1)
+            logger.error("Error response from %s: %d", request.url, response.status_code)
+        logger.info("Request completed: %s", request.url)
+        return response
 
 # --- Tool Endpoints ---
 
@@ -376,6 +382,94 @@ def get_capabilities():
                 _capabilities_cache["value"] = gather_capabilities()
                 _capabilities_cache["at"] = time.time()
             return _capabilities_cache["value"]
+
+# --- Router: AIden as an OpenAI-compatible model (see router.py) ---
+
+route_counter = meter.create_counter(
+    name="aiden_route_decisions",
+    description="How the router decided whether a request needed the user's notes",
+    unit="1"
+)
+stage_histogram = meter.create_histogram(
+    name="aiden_route_stage_latency",
+    description="Latency of each routing stage",
+    unit="s"
+)
+tokens_histogram = meter.create_histogram(
+    name="aiden_answer_tokens_per_second",
+    description="Generation speed of the answering backend",
+    unit="1/s"
+)
+
+@app.get("/v1/models")
+def list_models():
+    return {"object": "list", "data": [{"id": "aiden", "object": "model", "owned_by": "aiden"}]}
+
+@app.post("/v1/chat/completions")
+def chat_completions(body: Dict[str, Any]):
+    messages = body.get("messages", [])
+    prompt = next((m.get("content", "") for m in reversed(messages) if m.get("role") == "user"), "")
+    if isinstance(prompt, list):  # multi-part content: keep the text parts
+        prompt = " ".join(p.get("text", "") for p in prompt if isinstance(p, dict))
+
+    with tracer.start_as_current_span("router.decide") as span:
+        start = time.time()
+        wants_notes, decided_by = router.needs_notes(prompt)
+        stage_histogram.record(time.time() - start, {"stage": "decide", "decided_by": decided_by})
+        route_counter.add(1, {"needs_notes": str(wants_notes).lower(), "decided_by": decided_by})
+        span.set_attribute("router.needs_notes", wants_notes)
+        span.set_attribute("router.decided_by", decided_by)
+
+    notes = []
+    if wants_notes:
+        with tracer.start_as_current_span("router.retrieve") as span:
+            start = time.time()
+            notes = router.retrieve(prompt)
+            stage_histogram.record(time.time() - start, {"stage": "retrieve"})
+            span.set_attribute("router.notes_found", len(notes))
+
+    out_messages = router.build_messages(messages, notes)
+    stream = bool(body.get("stream"))
+    response, skipped = None, []
+    for name, base, model in router.candidate_backends(get_capabilities()):
+        span = tracer.start_span("router.answer", attributes={"router.backend": name, "router.model": model,
+                                                             "router.notes_used": len(notes), "router.stream": stream})
+        start = time.time()
+        try:
+            response = router.backend_request(base, model, out_messages, stream, body, notes)
+            break
+        except requests.RequestException as exc:
+            # Fall back to the next tier (e.g. GPU wedged -> NPU -> CPU)
+            skipped.append(name)
+            span.set_attribute("router.error", type(exc).__name__)
+            span.end()
+            route_counter.add(1, {"fallback_from": name})
+            logger.warning("Backend %s failed (%s), falling back", name, type(exc).__name__)
+    if response is None:
+        return JSONResponse(status_code=503, content={"error": {
+            "message": "None of my local models answered right now.", "type": "unavailable", "tried": skipped}})
+    span.set_attribute("router.skipped", ",".join(skipped))
+
+    def finished(tokens: int, seconds: float):
+        stage_histogram.record(time.time() - start, {"stage": "answer", "backend": name})
+        if tokens and seconds > 0:
+            tokens_histogram.record(tokens / seconds, {"backend": name})
+            span.set_attribute("router.tokens_per_second", round(tokens / seconds, 1))
+        span.end()
+
+    if stream:
+        return StreamingResponse(router.stream_answer(response, notes, finished), media_type="text/event-stream")
+
+    result = response.json()
+    usage = result.get("usage", {})
+    finished(usage.get("completion_tokens", 0), time.time() - start)
+    result["model"] = "aiden"
+    if result.get("choices"):
+        answer = result["choices"][0]["message"]["content"]
+        result["choices"][0]["message"]["content"] = answer + router.sources_footer(notes, answer)
+    result["aiden"] = {"backend": name, "model": model, "skipped": skipped, "needs_notes": wants_notes, "decided_by": decided_by,
+                       "notes": [{"path": n["path"], "heading": n["heading"], "score": n["score"]} for n in notes]}
+    return result
 
 # --- Tool Discovery ---
 

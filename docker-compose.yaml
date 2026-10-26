@@ -219,6 +219,8 @@ services:
       # Lets AIden report which profiles this machine runs (see /capabilities)
       - AIDEN_PROFILES=${COMPOSE_PROFILES:?}
       - OVMS_EMBED_MODEL_NAME=${OVMS_EMBED_MODEL_NAME:?}
+      # The router's request classifier runs on the NPU model
+      - OVMS_NPU_MODEL_NAME=${OVMS_NPU_MODEL_NAME:?}
     volumes:
       # The user's Obsidian vault, read-only: AIden indexes it for search (see vault.py)
       - ${VAULT_PATH:?}:/vault:ro
