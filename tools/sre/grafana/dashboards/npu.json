@@ -3,16 +3,29 @@
   "title": "AIden's NPU",
   "schemaVersion": 39,
   "version": 1,
+  "tags": [
+    "aiden",
+    "npu"
+  ],
   "time": {
     "from": "now-1h",
     "to": "now"
   },
   "refresh": "10s",
-  "tags": [
-    "aiden",
-    "npu"
-  ],
   "panels": [
+    {
+      "id": 100,
+      "type": "row",
+      "title": "Device",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
     {
       "id": 1,
       "type": "stat",
@@ -23,7 +36,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 0,
+        "y": 1,
         "w": 6,
         "h": 4
       },
@@ -69,7 +82,7 @@
       },
       "gridPos": {
         "x": 6,
-        "y": 0,
+        "y": 1,
         "w": 6,
         "h": 4
       },
@@ -115,7 +128,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 0,
+        "y": 1,
         "w": 12,
         "h": 4
       },
@@ -148,7 +161,7 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 4,
+        "y": 5,
         "w": 12,
         "h": 8
       },
@@ -183,7 +196,7 @@
       },
       "gridPos": {
         "x": 12,
-        "y": 4,
+        "y": 5,
         "w": 12,
         "h": 8
       },
@@ -225,9 +238,9 @@
       },
       "gridPos": {
         "x": 0,
-        "y": 12,
+        "y": 13,
         "w": 24,
-        "h": 8
+        "h": 6
       },
       "targets": [
         {
@@ -243,6 +256,127 @@
       "fieldConfig": {
         "defaults": {
           "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 200,
+      "type": "row",
+      "title": "Model serving (ovms-npu)",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 19,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 201,
+      "type": "timeseries",
+      "title": "Requests per minute",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (name) (rate(ovms_requests_accepted{job=\"ovms-npu\",api=\"V3\"}[5m])) * 60",
+          "legendFormat": "{{name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqpm"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 202,
+      "type": "timeseries",
+      "title": "In-flight requests",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 20,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum by (name) (ovms_current_graphs{job=\"ovms-npu\"})",
+          "legendFormat": "{{name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 203,
+      "type": "stat",
+      "title": "Requests (total) / errors",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 20,
+        "w": 8,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(ovms_requests_accepted{job=\"ovms-npu\",api=\"V3\"})",
+          "legendFormat": "requests"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "expr": "sum(ovms_graph_error{job=\"ovms-npu\"})",
+          "legendFormat": "errors"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none"
         },
         "overrides": []
       },

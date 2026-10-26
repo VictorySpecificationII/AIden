@@ -333,6 +333,8 @@ services:
       --task text_generation
       --max_prompt_len 2000
       --rest_port 8001
+      --metrics_enable
+      --metrics_list ovms_requests_accepted,ovms_requests_rejected,ovms_responses,ovms_current_graphs,ovms_graph_error,ovms_graph_processing_time_us
     devices:
       - /dev/accel:/dev/accel
     group_add:
@@ -355,6 +357,9 @@ services:
       homepage.name: "OVMS (NPU)"
       homepage.icon: "si-intel"
       homepage.href: "http://localhost:8001/v3/models"
+      prometheus.scrape: "true"
+      prometheus.port: "8001"
+      prometheus.job: "ovms-npu"
 
   # LLM serving on an Intel GPU (Arc / iGPU), same image as ovms-npu. OpenAI-compatible
   # API at /v3. Shares the ovms-data volume (model downloads and compile cache).
@@ -371,6 +376,8 @@ services:
       --target_device GPU
       --task text_generation
       --rest_port 8002
+      --metrics_enable
+      --metrics_list ovms_requests_accepted,ovms_requests_rejected,ovms_responses,ovms_current_graphs,ovms_graph_error,ovms_graph_processing_time_us
     devices:
       - /dev/dri:/dev/dri
     group_add:
@@ -392,22 +399,26 @@ services:
       homepage.name: "OVMS (Intel GPU)"
       homepage.icon: "si-intel"
       homepage.href: "http://localhost:8002/v3/models"
+      prometheus.scrape: "true"
+      prometheus.port: "8002"
+      prometheus.job: "ovms-gpu"
 
-  npu-exporter:
-    profiles: [npu]
+  # NPU and Intel GPU telemetry from sysfs; runs when either Intel profile is active
+  intel-exporter:
+    profiles: [npu, intel-gpu]
     image: python:3.12.7-slim
-    container_name: npu-exporter
+    container_name: intel-exporter
     restart: unless-stopped
-    command: ["python", "/app/npu_exporter.py"]
+    command: ["python", "/app/intel_exporter.py"]
     volumes:
-      - ./tools/sre/npu-exporter/npu_exporter.py:/app/npu_exporter.py:ro
+      - ./tools/sre/intel-exporter/intel_exporter.py:/app/intel_exporter.py:ro
       - /sys:/host/sys:ro
     networks:
       - dev
     labels:
       prometheus.scrape: "true"
       prometheus.port: "9101"
-      prometheus.job: "npu-exporter"
+      prometheus.job: "intel-exporter"
 
   # MLFlow Tracking Server to track experiments for ML
   mlflow:

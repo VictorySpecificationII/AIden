@@ -140,8 +140,8 @@ bootstrap/detect-profiles.sh   # detects GPUs/NPU and sets the profiles; --dry-r
 |---|---|
 | `nvidia` | Ollama on the NVIDIA GPU, DCGM exporter |
 | `cpu` | Ollama on CPU |
-| `npu` | OVMS serving a small LLM on the Intel NPU (OpenAI-compatible API on port 8001), NPU exporter, Grafana "AIden's NPU" dashboard |
-| `intel-gpu` | OVMS serving a mid-size LLM on an Intel GPU (Arc / iGPU), OpenAI-compatible API on port 8002 |
+| `npu` | OVMS serving a small LLM on the Intel NPU (OpenAI-compatible API on port 8001), Intel exporter, Grafana "AIden's NPU" dashboard |
+| `intel-gpu` | OVMS serving a mid-size LLM on an Intel GPU (Arc / iGPU), OpenAI-compatible API on port 8002, Intel exporter, Grafana "AIden's Intel GPU" dashboard |
 
 With `npu` / `intel-gpu`, `OPENWEBUI_OPENAI_API_BASE_URLS` must list `http://ovms-npu:8001/v3` / `http://ovms-gpu:8002/v3` (";"-separated, one non-empty `OPENWEBUI_OPENAI_API_KEYS` entry per URL) so OpenWebUI shows the models; `detect-profiles.sh` sets this. The first start downloads each model and compiles it for its device (several minutes); later starts use the cache.
 
