@@ -471,7 +471,8 @@ def chat_completions(body: Dict[str, Any]):
     out_messages = router.build_messages(messages, notes)
     stream = bool(body.get("stream"))
     response, skipped = None, []
-    for name, base, model in router.candidate_backends(get_capabilities()):
+    candidates = router.candidate_backends(get_capabilities())
+    for name, base, model in candidates:
         span = tracer.start_span("router.answer", attributes={"router.backend": name, "router.model": model,
                                                              "router.notes_used": len(notes), "router.stream": stream})
         start = time.time()
@@ -498,7 +499,8 @@ def chat_completions(body: Dict[str, Any]):
         span.end()
 
     if stream:
-        return StreamingResponse(router.stream_answer(response, notes, finished), media_type="text/event-stream")
+        route = router.route_footer(name, model, router.passed_over(name, candidates, skipped))
+        return StreamingResponse(router.stream_answer(response, notes, finished, route), media_type="text/event-stream")
 
     result = response.json()
     usage = result.get("usage", {})
@@ -506,7 +508,8 @@ def chat_completions(body: Dict[str, Any]):
     result["model"] = "aiden"
     if result.get("choices"):
         answer = result["choices"][0]["message"]["content"]
-        result["choices"][0]["message"]["content"] = answer + router.sources_footer(notes, answer)
+        result["choices"][0]["message"]["content"] = (answer + router.sources_footer(notes, answer)
+                                                     + router.route_footer(name, model, router.passed_over(name, candidates, skipped)))
     result["aiden"] = {"backend": name, "model": model, "skipped": skipped, "needs_notes": wants_notes, "decided_by": decided_by,
                        "notes": [{"path": n["path"], "heading": n["heading"], "score": n["score"]} for n in notes]}
     return result

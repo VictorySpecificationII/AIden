@@ -185,14 +185,40 @@ def backend_request(base: str, model: str, messages, stream: bool, request: Dict
     return response
 
 
+SHOW_ROUTE = os.environ.get("AIDEN_SHOW_ROUTE", "true").lower() != "false"
+DEVICE_NAMES = {"ovms-gpu": "the Intel GPU", "ovms-npu": "the NPU"}
+
+
+def route_footer(name: str, model: str, passed_over: List[str]) -> str:
+    """One line saying which model answered where, and which preferred tier wasn't
+    available, so AIden's choices are visible in chat."""
+    if not SHOW_ROUTE:
+        return ""
+    device = DEVICE_NAMES.get(name) or ("the NVIDIA GPU" if "nvidia" in os.environ.get("AIDEN_PROFILES", "") else "the CPU")
+    line = f"answered by {model} on {device}"
+    if passed_over:
+        line += f" ({' and '.join(DEVICE_NAMES.get(s, s) for s in passed_over)} {'was' if len(passed_over) == 1 else 'were'} unavailable)"
+    return f"\n\n*{line}*"
+
+
+def passed_over(answered_by: str, candidates: List[Tuple[str, str, str]], skipped: List[str]) -> List[str]:
+    """Preferred tiers above the one that answered which were down or didn't respond,
+    limited to tiers this machine is meant to have."""
+    expected = {"ovms-gpu": "intel-gpu", "ovms-npu": "npu"}
+    profiles = os.environ.get("AIDEN_PROFILES", "").split(",")
+    names = [c[0] for c in candidates]
+    higher = ANSWER_BACKENDS[:ANSWER_BACKENDS.index(answered_by)]
+    return [b for b in higher if (b in skipped or b not in names) and expected.get(b, "") in profiles]
+
+
 def sse_chunk(content: str, finish: Optional[str] = None) -> str:
     chunk = {"id": "aiden", "object": "chat.completion.chunk", "created": int(time.time()), "model": "aiden",
              "choices": [{"index": 0, "delta": {"content": content} if content else {}, "finish_reason": finish}]}
     return f"data: {json.dumps(chunk)}\n\n"
 
 
-def stream_answer(response: requests.Response, notes, on_done) -> Iterator[str]:
-    """Relay the backend's SSE stream, add the sources footer before [DONE]."""
+def stream_answer(response: requests.Response, notes, on_done, route: str = "") -> Iterator[str]:
+    """Relay the backend's SSE stream, add the sources and route footers before [DONE]."""
     tokens, start, answer = 0, time.time(), []
     # SSE responses carry no charset, and requests would otherwise decode them as Latin-1
     response.encoding = "utf-8"
@@ -212,7 +238,7 @@ def stream_answer(response: requests.Response, notes, on_done) -> Iterator[str]:
             yield f"data: {json.dumps(chunk)}\n\n"
         except (ValueError, KeyError, IndexError):
             continue
-    footer = sources_footer(notes, "".join(answer))
+    footer = sources_footer(notes, "".join(answer)) + route
     if footer:
         yield sse_chunk(footer)
     yield "data: [DONE]\n\n"
