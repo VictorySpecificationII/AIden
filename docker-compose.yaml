@@ -95,7 +95,7 @@ services:
       - node.name=es01
       - cluster.name=logs-cluster
       - discovery.type=single-node
-      - ELASTIC_PASSWORD=changeme
+      - ELASTIC_PASSWORD=${ELASTIC_PASSWORD:?}
       - xpack.security.enabled=false
       # - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     deploy:
@@ -160,7 +160,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=grafana  # Set the admin password
+      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:?}  # Set the admin password
     volumes:
       - grafana-data:/var/lib/grafana
       - ./tools/sre/grafana/datasources:/etc/grafana/provisioning/datasources
@@ -276,7 +276,7 @@ services:
       - WEBUI_AUTH=False
       - WEBUI_NAME=valiantlynx AI
       - WEBUI_URL=http://localhost:8080
-      - WEBUI_SECRET_KEY=t0p-s3cr3t
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:?}
 #      - RAG_EMBEDDING_MODEL_DEVICE_TYPE=cuda
     extra_hosts:
       - host.docker.internal:host-gateway
@@ -305,13 +305,13 @@ services:
     networks:
       - dev
     environment:
-      - AWS_ACCESS_KEY_ID=definitelyinsecure
-      - AWS_SECRET_ACCESS_KEY=notsosecretisitnow
+      - AWS_ACCESS_KEY_ID=${MLFLOW_S3_ACCESS_KEY:?}
+      - AWS_SECRET_ACCESS_KEY=${MLFLOW_S3_SECRET_KEY:?}
       - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
       - MLFLOW_S3_IGNORE_TLS=true
     command: >
       mlflow server
-      --backend-store-uri postgresql://postgres:postgres@postgres:5432/postgres
+      --backend-store-uri postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@postgres:5432/postgres
       --host 0.0.0.0
       --serve-artifacts
       --artifacts-destination s3://mlflow
@@ -334,13 +334,13 @@ services:
     networks:
       - dev
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=${POSTGRES_USER:?}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?}
       - POSTGRES_DATABASE=mlflow
     volumes:
       - postgres-data:/var/lib/postgresql/data/
     healthcheck:
-      test: ["CMD", "pg_isready", "-p", "5432", "-U", "postgres"]
+      test: ["CMD", "pg_isready", "-p", "5432", "-U", "${POSTGRES_USER:?}"]
       interval: 5s
       timeout: 5s
       retries: 3
@@ -363,8 +363,8 @@ services:
     networks:
       - dev
     environment:
-      - MINIO_ROOT_USER=minioadmin
-      - MINIO_ROOT_PASSWORD=minioadmin
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:?}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:?}
       - MINIO_ADDRESS=:9000
       - MINIO_PORT=9000
       - MINIO_STORAGE_USE_HTTPS=False
@@ -393,8 +393,8 @@ services:
     entrypoint: >
       /bin/sh -c "
       sleep 30s;
-      /usr/bin/mc alias set s3minio http://minio:9000 minioadmin minioadmin;
-      /usr/bin/mc admin user svcacct add --access-key "definitelyinsecure" --secret-key "notsosecretisitnow" --name mlflow --description connection s3minio minioadmin;
+      /usr/bin/mc alias set s3minio http://minio:9000 ${MINIO_ROOT_USER:?} ${MINIO_ROOT_PASSWORD:?};
+      /usr/bin/mc admin user svcacct add --access-key "${MLFLOW_S3_ACCESS_KEY:?}" --secret-key "${MLFLOW_S3_SECRET_KEY:?}" --name mlflow --description connection s3minio ${MINIO_ROOT_USER:?};
       /usr/bin/mc mb s3minio/mlflow;
       /usr/bin/mc policy set public s3minio/mlflow;
       exit 0;

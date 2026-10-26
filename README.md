@@ -125,6 +125,14 @@ sudo systemctl restart docker
 
 ## Starting the platform
 
+Credentials, endpoints and machine-specific paths are read from environment variables. Create your local `.env` (gitignored) from the template first; Docker Compose loads it automatically and refuses to start if a required variable is missing:
+
+```bash
+cp .env.example .env
+chmod 600 .env
+# edit .env: set LLAMACPP_DIR, and replace the default credentials if needed
+```
+
 ```bash
 docker compose up -d
 ```

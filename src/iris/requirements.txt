@@ -137,6 +137,7 @@ pyparsing==3.2.3
 pysftp==0.2.9
 PySocks==1.7.1
 python-dateutil==2.9.0.post0
+python-dotenv==1.1.0
 pytz==2025.2
 PyYAML==6.0.2
 regex==2024.11.6

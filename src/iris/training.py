@@ -4,6 +4,8 @@ import shutil
 import mlflow
 import transformers
 import boto3
+from pathlib import Path
+from dotenv import load_dotenv
 from datasets import load_dataset, load_from_disk
 from transformers import (
     AutoTokenizer,
@@ -17,11 +19,18 @@ print("CUDA available:", torch.cuda.is_available())
 print("GPU:", torch.cuda.get_device_name(0) if torch.cuda.is_available() else "No GPU")
 print("Transformers version:", transformers.__version__)
 
+# --- Environment (repo-root .env; variables already set in the shell take precedence) ---
+load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+MLFLOW_TRACKING_URI = os.environ["MLFLOW_TRACKING_URI"]
+S3_ENDPOINT = os.environ["S3_ENDPOINT_URL"]
+S3_ACCESS_KEY = os.environ["MINIO_ROOT_USER"]
+S3_SECRET_KEY = os.environ["MINIO_ROOT_PASSWORD"]
+LLAMACPP_DIR = os.environ["LLAMACPP_DIR"]
+
 # --- Config ---
 MODEL_NAME = "HuggingFaceTB/SmolLM-135M"
 EXPERIMENT_NAME = "smollm-finetune"
 dataset_name = "Abirate/english_quotes"
-S3_ENDPOINT = "http://localhost:9000"
 S3_BUCKET = "mlflow"  # <-- Use mlflow bucket here
 S3_PREFIX = "english_quotes"
 LOCAL_DATA_DIR = "/tmp/ml_data"
@@ -42,8 +51,8 @@ dataset.save_to_disk(LOCAL_DATA_DIR)
 s3 = boto3.client(
     "s3",
     endpoint_url=S3_ENDPOINT,
-    aws_access_key_id="minioadmin",
-    aws_secret_access_key="minioadmin",
+    aws_access_key_id=S3_ACCESS_KEY,
+    aws_secret_access_key=S3_SECRET_KEY,
 )
 
 def upload_dir_to_s3(local_dir, bucket, s3_prefix=""):
@@ -123,7 +132,7 @@ def sync_tensorboard_logs_to_flat_prefix(bucket, experiment_id, run_id, s3_clien
             s3_client.copy_object(CopySource=copy_source, Bucket=bucket, Key=dest_key)
 
 # --- MLflow Logging ---
-mlflow.set_tracking_uri("http://localhost:5000")
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 mlflow.set_experiment(EXPERIMENT_NAME)
 
 with mlflow.start_run() as run:
@@ -169,8 +178,7 @@ import subprocess
 from pathlib import Path
 
 # --- Prepare for GGUF conversion ---
-LLAMACPP_DIR = "/home/achristofi/Desktop/AIden/tools/mlops/llama.cpp"
-LLAMACPP_CONVERTER = "/home/achristofi/Desktop/AIden/tools/mlops/llama.cpp/convert_hf_to_gguf.py"
+LLAMACPP_CONVERTER = os.path.join(LLAMACPP_DIR, "convert_hf_to_gguf.py")
 GGUF_DIR = "/tmp/gguf_convert"
 GGUF_OUTPUT = f"{GGUF_DIR}/smollm.gguf"
 
@@ -221,8 +229,7 @@ from mlflow.tracking import MlflowClient
 # --- Config ---
 model_name = "smollm-gguf"
 experiment_name = "smollm-finetune"
-mlflow_uri = "http://localhost:5000"
-mlflow.set_tracking_uri(mlflow_uri)
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 container_name = "ollama"  # Change this to your container name
 container_dest_dir = "/root/ollama_build"
 local_temp_dir = "/tmp/ollama_build"
@@ -235,8 +242,8 @@ import boto3
 s3 = boto3.client(
     "s3",
     endpoint_url=S3_ENDPOINT,
-    aws_access_key_id="minioadmin",
-    aws_secret_access_key="minioadmin",
+    aws_access_key_id=S3_ACCESS_KEY,
+    aws_secret_access_key=S3_SECRET_KEY,
 )
 
 # --- Config ---
