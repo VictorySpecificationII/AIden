@@ -194,6 +194,8 @@ def sse_chunk(content: str, finish: Optional[str] = None) -> str:
 def stream_answer(response: requests.Response, notes, on_done) -> Iterator[str]:
     """Relay the backend's SSE stream, add the sources footer before [DONE]."""
     tokens, start, answer = 0, time.time(), []
+    # SSE responses carry no charset, and requests would otherwise decode them as Latin-1
+    response.encoding = "utf-8"
     for line in response.iter_lines(decode_unicode=True):
         if not line or not line.startswith("data:"):
             continue

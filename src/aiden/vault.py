@@ -202,7 +202,9 @@ def scan(tracer=None):
     status["last_scan_started"] = datetime.now(timezone.utc).isoformat()
     disk = notes_on_disk()
     indexed = indexed_mtimes()
-    changed = [p for p, m in disk.items() if indexed.get(p) != m]
+    # Qdrant stores floats with slightly less precision, so exact equality would re-embed
+    # unchanged notes on every scan; real edits differ by far more than 1 ms
+    changed = [p for p, m in disk.items() if p not in indexed or abs(indexed[p] - m) > 1e-3]
     removed = [p for p in indexed if p not in disk]
     status.update(notes_on_disk=len(disk), pending_notes=len(changed))
 
