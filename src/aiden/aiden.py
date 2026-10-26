@@ -13,6 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 
+import vault
+
 # OpenTelemetry imports
 from opentelemetry import trace, metrics
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -350,6 +352,22 @@ def get_time(iso: bool = True, token: str = Depends(allow_all_tokens)):
             return {"time_iso": now.isoformat()}
         return {"time_iso": datetime.now().isoformat()}
 
+# --- Vault (AIden's memory of the user's notes; local only) ---
+
+@app.on_event("startup")
+def start_vault_indexer():
+    vault.start(tracer)
+
+@app.get("/vault/status")
+def vault_status():
+    return vault.status
+
+@app.get("/vault/search")
+def vault_search(q: str, k: int = 5):
+    with tracer.start_as_current_span("vault.search") as span:
+        span.set_attribute("vault.k", k)
+        return {"query": q, "results": vault.search(q, k)}
+
 @app.get("/capabilities", response_model=CapabilitiesResponse)
 def get_capabilities():
     with tracer.start_as_current_span("capabilities"):
@@ -376,5 +394,7 @@ def root():
         "Redoc": "/redoc",
         "OpenAPI Spec": "/openapi.json",
         "Tools": "/tools",
-        "Capabilities": "/capabilities"
+        "Capabilities": "/capabilities",
+        "Vault status": "/vault/status",
+        "Vault search": "/vault/search?q=..."
     }
