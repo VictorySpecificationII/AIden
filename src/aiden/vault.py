@@ -5,8 +5,8 @@ and stored in a Qdrant collection together with their path, heading and the note
 modification time. A background thread re-scans periodically and re-embeds only
 notes whose modification time changed; deleted notes are removed from the index.
 
-Embedding is split by task (see docker-compose.yaml): bulk indexing goes to
-ovms-embed-index (NPU) when it's available, search queries to ovms-embed-query (CPU).
+Embeddings come from ovms-embed-query (CPU) for both search and indexing. If a
+dedicated ovms-embed-index service exists (e.g. on the NPU), bulk indexing prefers it.
 
 Vault content is private: it only ever goes to local services (OVMS, Qdrant).
 """

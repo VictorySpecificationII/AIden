@@ -423,12 +423,11 @@ services:
     networks:
       - dev
 
-  # Text embeddings for vault search (OpenAI-compatible /v3/embeddings), split by task:
-  # - ovms-cpu-embed (always on, alias ovms-embed-query): search queries; short inputs
-  #   take ~35 ms on CPU vs ~1 s on the NPU, which pads every input to max_length
-  # - ovms-npu-embed (npu profile, alias ovms-embed-index): background vault indexing,
-  #   which keeps the CPU free; without an NPU, AIden indexes via ovms-embed-query
-  # Both serve the same model, so their vectors are comparable.
+  # Text embeddings for vault search and indexing (OpenAI-compatible /v3/embeddings).
+  # Short queries take ~35 ms on CPU (vs ~1 s on the NPU, which pads every input to
+  # max_length). A separate NPU copy for bulk indexing was removed (2 GiB of RAM for a
+  # job that's done once): indexing now uses this service too. vault.py still prefers an
+  # ovms-embed-index service if one is ever added back.
   ovms-cpu-embed:
     image: openvino/model_server:2026.4.1-gpu
     container_name: ovms-cpu-embed
@@ -447,37 +446,6 @@ services:
     networks:
       dev:
         aliases: [ovms-embed-query]
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8003/v2/health/ready"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30m
-
-  ovms-npu-embed:
-    profiles: [npu]
-    image: openvino/model_server:2026.4.1-gpu
-    container_name: ovms-npu-embed
-    restart: unless-stopped
-    command: >
-      --source_model ${OVMS_EMBED_MODEL:?}
-      --model_name ${OVMS_EMBED_MODEL_NAME:?}
-      --model_repository_path /home/ovms/models
-      --cache_dir /home/ovms/models/.ov_cache
-      --target_device NPU
-      --task embeddings
-      --pooling LAST
-      --max_length 1000
-      --rest_port 8003
-    devices:
-      - /dev/accel:/dev/accel
-    group_add:
-      - "${RENDER_GID:?}"
-    volumes:
-      - ovms-data:/home/ovms
-    networks:
-      dev:
-        aliases: [ovms-embed-index]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8003/v2/health/ready"]
       interval: 30s
