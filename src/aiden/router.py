@@ -29,8 +29,6 @@ OLLAMA_OPENAI_PATH = "/v1"
 MIN_NOTE_SCORE = float(os.environ.get("AIDEN_MIN_NOTE_SCORE", "0.45"))
 # The local model ends its reply with this when it's unsure; the router removes it
 UNSURE_MARKER = "[unsure]"
-MENTOR_URL = os.environ.get("MENTOR_URL", "http://mentor-bridge:8765")
-MENTOR_TOKEN = os.environ.get("MENTOR_TOKEN", "")
 MENTOR_OFFER = "I'm not confident about this one. Say \"ask Claude\" if you'd like a second opinion."
 ANSWER_TIMEOUT_S = 180       # whole non-streamed answer
 STREAM_READ_TIMEOUT_S = 60   # first token / gap between streamed chunks
@@ -149,61 +147,6 @@ def sources_footer(notes: List[Dict[str, Any]], answer: str) -> str:
     lines = [f"[{i}] {n['path']}" + (f" › {n['heading']}" if n["heading"] else "")
              for i, n in enumerate(notes, 1) if i in cited]
     return "\n\nSources:\n" + "\n".join(lines) if lines else ""
-
-
-# --- Mentor (Claude via the host bridge) --------------------------------------
-
-MENTOR_TRIGGERS = [
-    r"\b(ask|check with|ask your|ask the) (claude|mentor)\b",
-    r"\bsecond opinion\b",
-    r"\bnot sure either\b",
-]
-FOOTER_START = re.compile(r"\n\n(Sources:|\*answered by |\*I'm not confident)")
-
-
-def wants_mentor(prompt: str) -> bool:
-    return any(re.search(p, prompt.lower()) for p in MENTOR_TRIGGERS)
-
-
-def strip_footers(text: str) -> str:
-    match = FOOTER_START.search(text or "")
-    return (text[:match.start()] if match else text or "").strip()
-
-
-def mentor_question(messages: List[Dict[str, Any]], prompt: str) -> Tuple[str, str, bool]:
-    """(question for the mentor, AIden's previous draft or "", whether this follows AIden's offer).
-
-    A bare "ask Claude" refers to the previous question. AIden's previous answer goes along
-    as a draft only when it didn't use the user's notes (it has no Sources footer), because a
-    paraphrase of a note could otherwise leave the machine.
-    """
-    remainder = prompt
-    for pattern in MENTOR_TRIGGERS:
-        remainder = re.sub(pattern, "", remainder, flags=re.IGNORECASE)
-    remainder = remainder.strip(" ,.:;!?-\n")
-    users = [m for m in messages if m.get("role") == "user"]
-    assistants = [m for m in messages if m.get("role") == "assistant"]
-    previous_answer = assistants[-1].get("content", "") if assistants else ""
-    if isinstance(previous_answer, list):
-        previous_answer = " ".join(p.get("text", "") for p in previous_answer if isinstance(p, dict))
-    if len(remainder) >= 15 or len(users) < 2:
-        question = remainder or prompt
-        draft = ""
-    else:
-        question = users[-2].get("content", "") if isinstance(users[-2].get("content"), str) else ""
-        draft = "" if "\n\nSources:" in previous_answer else strip_footers(previous_answer)
-    return question, draft, MENTOR_OFFER[:30] in previous_answer
-
-
-def ask_mentor(question: str, draft: str, notes: List[Dict[str, Any]]) -> Dict[str, Any]:
-    payload = {"question": question, "draft": draft}
-    url = f"{MENTOR_URL}/ask"
-    check_outbound(url, payload, notes)
-    response = requests.post(url, json=payload, headers={"X-Mentor-Token": MENTOR_TOKEN}, timeout=(5, 200))
-    body = response.json()
-    if response.status_code != 200:
-        raise RuntimeError(body.get("error", f"mentor returned {response.status_code}"))
-    return body
 
 
 def split_unsure(text: str) -> Tuple[str, bool]:
