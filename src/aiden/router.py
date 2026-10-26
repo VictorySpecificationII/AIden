@@ -257,9 +257,12 @@ def stream_answer(response: requests.Response, notes, on_done, route: str = "", 
             tokens += 1
             answer.append(content)
             pending += content
-            if len(pending) > hold:
-                yield sse_chunk(pending[:-hold])
-                pending = pending[-hold:]
+            # Keep back trailing whitespace plus the last few visible characters, so the
+            # marker can't be partly sent even when the model adds newlines after it
+            cut = len(pending.rstrip()) - hold
+            if cut > 0:
+                yield sse_chunk(pending[:cut])
+                pending = pending[cut:]
         except (ValueError, KeyError, IndexError):
             continue
     text, unsure = split_unsure("".join(answer))
