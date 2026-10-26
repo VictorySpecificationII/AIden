@@ -20,6 +20,10 @@ import vault
 # OpenTelemetry imports
 from opentelemetry import trace, metrics
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.instrumentation.requests import RequestsInstrumentor
+from opentelemetry.instrumentation.threading import ThreadingInstrumentor
+from opentelemetry.instrumentation.utils import suppress_instrumentation
+from urllib.parse import urlparse
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -308,6 +312,15 @@ app = FastAPI(
 )
 
 FastAPIInstrumentor.instrument_app(app)
+# Child spans for every outgoing HTTP call (NPU/GPU/embeddings/Qdrant/Prometheus/mentor)
+def name_outgoing_span(span, request):
+    # Default span names are just "GET"/"POST"; name them after the destination instead
+    url = urlparse(request.url)
+    span.update_name(f"{request.method} {url.hostname} {url.path}")
+
+RequestsInstrumentor().instrument(request_hook=name_outgoing_span)
+# Carry the trace context into ThreadPoolExecutor workers (/capabilities probes in parallel)
+ThreadingInstrumentor().instrument()
 
 app.add_middleware(
     CORSMiddleware,
@@ -328,23 +341,23 @@ def allow_all_tokens(auth: HTTPAuthorizationCredentials = Security(auth_scheme))
 async def telemetry_middleware(request: Request, call_next):
     start = time.time()
     response = None
-    with tracer.start_as_current_span("http_request"):
-        logger.info("Handling request %s", request.url)
-        try:
-            response = await call_next(request)
-        except Exception:
-            # Don't swallow it (a return in finally did, leaving clients hanging): log, count, re-raise
-            error_counter.add(1)
-            logger.exception("Unhandled error while handling %s", request.url)
-            raise
-        finally:
-            latency_histogram.record(time.time() - start)
-            request_counter.add(1)
-        if response.status_code >= 400:
-            error_counter.add(1)
-            logger.error("Error response from %s: %d", request.url, response.status_code)
-        logger.info("Request completed: %s", request.url)
-        return response
+    # The request span itself comes from FastAPIInstrumentor; this middleware does metrics and logs
+    logger.info("Handling request %s", request.url)
+    try:
+        response = await call_next(request)
+    except Exception:
+        # Don't swallow it (a return in finally did, leaving clients hanging): log, count, re-raise
+        error_counter.add(1)
+        logger.exception("Unhandled error while handling %s", request.url)
+        raise
+    finally:
+        latency_histogram.record(time.time() - start)
+        request_counter.add(1)
+    if response.status_code >= 400:
+        error_counter.add(1)
+        logger.error("Error response from %s: %d", request.url, response.status_code)
+    logger.info("Request completed: %s", request.url)
+    return response
 
 # --- Tool Endpoints ---
 
@@ -426,7 +439,9 @@ def vault_gauge(key: str):
 def vault_chunks(_):
     # Live count from Qdrant, so progress shows during the first (long) scan too
     try:
-        yield Observation(vault.count_chunks())
+        with suppress_instrumentation():  # runs every export interval; not worth a trace
+            count = vault.count_chunks()
+        yield Observation(count)
     except requests.RequestException:
         return
 
@@ -454,47 +469,65 @@ def chat_completions(body: Dict[str, Any]):
     if isinstance(prompt, list):  # multi-part content: keep the text parts
         prompt = " ".join(p.get("text", "") for p in prompt if isinstance(p, dict))
 
+    # The trace explains each decision; it records the prompt's length, never its text
+    trace.get_current_span().set_attribute("router.prompt_chars", len(prompt))
+
     with tracer.start_as_current_span("router.decide") as span:
         start = time.time()
-        wants_notes, decided_by = router.needs_notes(prompt)
+        wants_notes, decided_by, reason = router.needs_notes(prompt)
         stage_histogram.record(time.time() - start, {"stage": "decide", "decided_by": decided_by})
         route_counter.add(1, {"needs_notes": str(wants_notes).lower(), "decided_by": decided_by})
         span.set_attribute("router.needs_notes", wants_notes)
         span.set_attribute("router.decided_by", decided_by)
+        span.set_attribute("router.reason", reason)
+        logger.info("Notes %s (%s: %s)", "needed" if wants_notes else "not needed", decided_by, reason)
 
     notes = []
     if wants_notes:
         with tracer.start_as_current_span("router.retrieve") as span:
             start = time.time()
-            notes = router.retrieve(prompt)
+            notes, matches = router.retrieve(prompt)
             stage_histogram.record(time.time() - start, {"stage": "retrieve"})
+            span.set_attribute("router.embed_device", "cpu")
+            span.set_attribute("router.min_score", router.MIN_NOTE_SCORE)
             span.set_attribute("router.notes_found", len(notes))
+            span.set_attribute("router.notes_below_threshold", len(matches) - len(notes))
+            # Note paths and scores only: vault text stays out of traces
+            span.set_attribute("router.notes", [f"{n['score']:.3f} {n['path']} › {n['heading']}" for n in matches])
+            logger.info("Vault search: %d of %d matches above %.2f", len(notes), len(matches), router.MIN_NOTE_SCORE)
 
     out_messages = router.build_messages(messages, notes)
     stream = bool(body.get("stream"))
     response, skipped = None, []
     candidates = router.candidate_backends(get_capabilities())
+    trace.get_current_span().set_attribute("router.candidates", [c[0] for c in candidates])
     for name, base, model in candidates:
         span = tracer.start_span("router.answer", attributes={"router.backend": name, "router.model": model,
                                                              "router.notes_used": len(notes), "router.stream": stream})
         start = time.time()
         try:
-            response = router.backend_request(base, model, out_messages, stream, body, notes)
+            # Current span, so the outgoing HTTP call shows up as its child
+            with trace.use_span(span, end_on_exit=False):
+                response = router.backend_request(base, model, out_messages, stream, body, notes)
             break
         except requests.RequestException as exc:
             # Fall back to the next tier (e.g. GPU wedged -> NPU -> CPU)
             skipped.append(name)
             span.set_attribute("router.error", type(exc).__name__)
+            span.add_event("fallback", {"from": name, "error": type(exc).__name__})
             span.end()
             fallback_counter.add(1, {"from": name})
             logger.warning("Backend %s failed (%s), falling back", name, type(exc).__name__)
     if response is None:
+        logger.error("No backend answered (tried %s)", ", ".join(skipped) or "none available")
         return JSONResponse(status_code=503, content={"error": {
             "message": "None of my local models answered right now.", "type": "unavailable", "tried": skipped}})
     span.set_attribute("router.skipped", ",".join(skipped))
+    logger.info("Answering with %s on %s%s", model, name, f" after {', '.join(skipped)} failed" if skipped else "")
 
     def finished(tokens: int, seconds: float):
         stage_histogram.record(time.time() - start, {"stage": "answer", "backend": name})
+        span.set_attribute("router.answer_tokens", tokens)
         if tokens and seconds > 0:
             tokens_histogram.record(tokens / seconds, {"backend": name})
             span.set_attribute("router.tokens_per_second", round(tokens / seconds, 1))

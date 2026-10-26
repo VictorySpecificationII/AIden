@@ -72,19 +72,22 @@ def note_titles() -> List[str]:
     return _note_titles
 
 
-def rules_decide(prompt: str) -> Optional[bool]:
-    """True/False when a rule settles it, None when it's unclear."""
+def rules_decide(prompt: str) -> Tuple[Optional[bool], str]:
+    """(True/False when a rule settles it, None when it's unclear; which rule)."""
     text = prompt.lower()
-    if any(re.search(p, text) for p in NO_NOTES_PATTERNS):
-        return False
-    if any(re.search(p, text) for p in NOTES_PATTERNS):
-        return True
-    if any(title in text for title in note_titles()):
-        return True
-    return None
+    for pattern in NO_NOTES_PATTERNS:
+        if re.search(pattern, text):
+            return False, f"no-notes pattern {pattern}"
+    for pattern in NOTES_PATTERNS:
+        if re.search(pattern, text):
+            return True, f"notes pattern {pattern}"
+    for title in note_titles():
+        if title in text:
+            return True, f"mentions note or folder '{title}'"
+    return None, "no rule matched"
 
 
-def classify_with_npu(prompt: str) -> Optional[bool]:
+def classify_with_npu(prompt: str) -> Tuple[Optional[bool], str]:
     question = (
         "Does answering the following message require the user's own personal notes "
         "(their projects, decisions, clients, plans or past work)? Reply with only yes or no.\n\n"
@@ -97,34 +100,35 @@ def classify_with_npu(prompt: str) -> Optional[bool]:
         response.raise_for_status()
         answer = response.json()["choices"][0]["message"]["content"].strip().lower()
         if answer.startswith("yes"):
-            return True
+            return True, f"classifier said '{answer}'"
         if answer.startswith("no"):
-            return False
-        return None
-    except (requests.RequestException, KeyError, ValueError, IndexError):
-        return None
+            return False, f"classifier said '{answer}'"
+        return None, f"classifier gave an unclear answer '{answer[:40]}'"
+    except (requests.RequestException, KeyError, ValueError, IndexError) as exc:
+        return None, f"classifier failed: {type(exc).__name__}"
 
 
-def needs_notes(prompt: str) -> Tuple[bool, str]:
-    """(decision, how it was decided)."""
-    decision = rules_decide(prompt)
+def needs_notes(prompt: str) -> Tuple[bool, str, str]:
+    """(decision, how it was decided: rule/npu/fallback, the reason in words)."""
+    decision, reason = rules_decide(prompt)
     if decision is not None:
-        return decision, "rule"
-    decision = classify_with_npu(prompt)
+        return decision, "rule", reason
+    decision, verdict = classify_with_npu(prompt)
     if decision is not None:
-        return decision, "npu"
+        return decision, "npu", verdict
     # Classifier unavailable: searching is cheap and the score threshold filters noise
-    return True, "fallback"
+    return True, "fallback", f"{verdict}; searching anyway"
 
 
 # --- Step 2: retrieve ---------------------------------------------------------
 
-def retrieve(prompt: str) -> List[Dict[str, Any]]:
+def retrieve(prompt: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """(notes kept, all matches before the score threshold)."""
     try:
         results = vault.search(prompt, limit=MAX_NOTES)
     except (requests.RequestException, KeyError, ValueError):
-        return []
-    return [r for r in results if r["score"] >= MIN_NOTE_SCORE]
+        return [], []
+    return [r for r in results if r["score"] >= MIN_NOTE_SCORE], results
 
 
 def notes_context(notes: List[Dict[str, Any]]) -> str:

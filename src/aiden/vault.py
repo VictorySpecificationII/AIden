@@ -20,6 +20,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 import requests
+from opentelemetry.instrumentation.utils import suppress_instrumentation
 
 VAULT_DIR = os.environ.get("VAULT_DIR", "/vault")
 QDRANT_URL = os.environ.get("QDRANT_URL", "http://qdrant:6333")
@@ -34,6 +35,10 @@ EMBED_BATCH = 8
 
 logger = logging.getLogger("aiden.vault")
 HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
+
+# Notes that produced no chunks (empty or heading-only) have nothing in Qdrant; remember
+# their mtime so they aren't treated as new on every scan
+_empty_notes: Dict[str, float] = {}
 
 status: Dict[str, Any] = {
     "state": "starting", "notes_on_disk": 0, "notes_indexed": 0, "chunks_indexed": 0,
@@ -177,7 +182,8 @@ def notes_on_disk() -> Dict[str, float]:
     return found
 
 
-def index_note(rel_path: str, mtime: float, url: str):
+def index_note(rel_path: str, mtime: float, url: str) -> int:
+    """Embed and store one note; returns its number of chunks."""
     with open(os.path.join(VAULT_DIR, rel_path), encoding="utf-8", errors="replace") as f:
         chunks = chunk_note(rel_path, f.read())
     points = []
@@ -195,40 +201,69 @@ def index_note(rel_path: str, mtime: float, url: str):
     delete_note(rel_path)
     if points:
         qdrant("PUT", f"/collections/{COLLECTION}/points?wait=true", json={"points": points})
+        _empty_notes.pop(rel_path, None)
+    else:
+        _empty_notes[rel_path] = mtime
+    return len(points)
 
 
 def scan(tracer=None):
     status["state"] = "scanning"
     status["last_scan_started"] = datetime.now(timezone.utc).isoformat()
-    disk = notes_on_disk()
-    indexed = indexed_mtimes()
+    # Comparing disk with the index is routine bookkeeping: no trace unless there's work
+    with suppress_instrumentation():
+        disk = notes_on_disk()
+        indexed = indexed_mtimes()
     # Qdrant stores floats with slightly less precision, so exact equality would re-embed
     # unchanged notes on every scan; real edits differ by far more than 1 ms
-    changed = [p for p, m in disk.items() if p not in indexed or abs(indexed[p] - m) > 1e-3]
+    def unchanged(p: str, m: float) -> bool:
+        seen = indexed.get(p, _empty_notes.get(p))
+        return seen is not None and abs(seen - m) <= 1e-3
+    changed = [p for p, m in disk.items() if not unchanged(p, m)]
     removed = [p for p in indexed if p not in disk]
     status.update(notes_on_disk=len(disk), pending_notes=len(changed))
 
+    if changed or removed:
+        if tracer:
+            with tracer.start_as_current_span("vault.scan") as span:
+                span.set_attribute("vault.notes_on_disk", len(disk))
+                span.set_attribute("vault.notes_changed", len(changed))
+                span.set_attribute("vault.notes_removed", len(removed))
+                apply_changes(changed, removed, disk, tracer)
+                span.set_attribute("vault.embed_device", status["embed_device"] or "none")
+        else:
+            apply_changes(changed, removed, disk, tracer)
+
+    with suppress_instrumentation():
+        status.update(notes_indexed=len(indexed_mtimes()), chunks_indexed=count_chunks(), state="idle",
+                      last_scan_finished=datetime.now(timezone.utc).isoformat())
+    logger.info("Vault scan: %d notes, %d changed, %d removed", len(disk), len(changed), len(removed))
+
+
+def apply_changes(changed: List[str], removed: List[str], disk: Dict[str, float], tracer=None):
     for rel_path in removed:
         delete_note(rel_path)
-    if changed:
-        status["state"] = "indexing"
-        url = index_embed_url()
-        for rel_path in sorted(changed):
-            try:
-                if tracer:
-                    with tracer.start_as_current_span("vault.index_note") as span:
-                        span.set_attribute("vault.embed_device", status["embed_device"])
-                        index_note(rel_path, disk[rel_path], url)
-                else:
-                    index_note(rel_path, disk[rel_path], url)
-            except (requests.RequestException, OSError, ValueError) as exc:
-                status["last_error"] = f"{rel_path}: {type(exc).__name__}"
-                logger.warning("Indexing %s failed: %s", rel_path, exc)
-            status["pending_notes"] -= 1
-
-    status.update(notes_indexed=len(indexed_mtimes()), chunks_indexed=count_chunks(), state="idle",
-                  last_scan_finished=datetime.now(timezone.utc).isoformat())
-    logger.info("Vault scan: %d notes, %d changed, %d removed", len(disk), len(changed), len(removed))
+    for rel_path in [p for p in _empty_notes if p not in disk]:
+        del _empty_notes[rel_path]
+    if not changed:
+        return
+    status["state"] = "indexing"
+    url = index_embed_url()
+    for rel_path in sorted(changed):
+        start = time.time()
+        try:
+            if tracer:
+                with tracer.start_as_current_span("vault.index_note") as span:
+                    span.set_attribute("vault.path", rel_path)
+                    span.set_attribute("vault.embed_device", status["embed_device"])
+                    span.set_attribute("vault.chunks", index_note(rel_path, disk[rel_path], url))
+            else:
+                index_note(rel_path, disk[rel_path], url)
+            logger.debug("Indexed %s in %.1f s", rel_path, time.time() - start)
+        except (requests.RequestException, OSError, ValueError) as exc:
+            status["last_error"] = f"{rel_path}: {type(exc).__name__}"
+            logger.warning("Indexing %s failed: %s", rel_path, exc)
+        status["pending_notes"] -= 1
 
 
 def run_forever(tracer=None):

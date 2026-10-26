@@ -26,6 +26,7 @@ opentelemetry-instrumentation-aws-lambda==0.47b0
 opentelemetry-instrumentation-dbapi==0.47b0
 opentelemetry-instrumentation-fastapi==0.47b0
 opentelemetry-instrumentation-logging==0.47b0
+opentelemetry-instrumentation-requests==0.47b0
 opentelemetry-instrumentation-sqlite3==0.47b0
 opentelemetry-instrumentation-threading==0.47b0
 opentelemetry-instrumentation-tortoiseorm==0.47b0
