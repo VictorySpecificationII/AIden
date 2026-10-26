@@ -134,15 +134,18 @@ bootstrap/detect-profiles.sh   # detects GPUs/NPU and sets the profiles; --dry-r
 # edit .env: set COMPOSE_PROFILES and LLAMACPP_DIR, and replace the default credentials if needed
 ```
 
-`COMPOSE_PROFILES` selects the hardware profiles for this machine. Pick one of `nvidia` / `cpu`, optionally combined with `npu` (e.g. `COMPOSE_PROFILES=cpu,npu`):
+`COMPOSE_PROFILES` selects the hardware profiles for this machine (`bootstrap/detect-profiles.sh` sets it for you). Pick one of `nvidia` / `cpu`, optionally combined with `npu` and/or `intel-gpu` (e.g. `COMPOSE_PROFILES=cpu,npu,intel-gpu`):
 
 | Profile | Adds |
 |---|---|
 | `nvidia` | Ollama on the NVIDIA GPU, DCGM exporter |
 | `cpu` | Ollama on CPU |
 | `npu` | OVMS serving a small LLM on the Intel NPU (OpenAI-compatible API on port 8001), NPU exporter, Grafana "AIden's NPU" dashboard |
+| `intel-gpu` | OVMS serving a mid-size LLM on an Intel GPU (Arc / iGPU), OpenAI-compatible API on port 8002 |
 
-With `npu`, set `OPENWEBUI_OPENAI_API_BASE_URLS=http://ovms-npu:8001/v3` and any non-empty `OPENWEBUI_OPENAI_API_KEYS` so OpenWebUI lists the NPU model. The first start downloads the model and compiles it for the NPU (several minutes); later starts use the cache.
+With `npu` / `intel-gpu`, `OPENWEBUI_OPENAI_API_BASE_URLS` must list `http://ovms-npu:8001/v3` / `http://ovms-gpu:8002/v3` (";"-separated, one non-empty `OPENWEBUI_OPENAI_API_KEYS` entry per URL) so OpenWebUI shows the models; `detect-profiles.sh` sets this. The first start downloads each model and compiles it for its device (several minutes); later starts use the cache.
+
+Measured on a Core Ultra 7 265H: Qwen3-8B on the Arc iGPU ~14 tok/s, Phi-3.5-mini on the NPU ~11 tok/s. The NPU's value is low power and keeping the GPU/CPU free, not speed.
 
 A profile can also be chosen per command, e.g. `docker compose --profile cpu up -d`.
 
