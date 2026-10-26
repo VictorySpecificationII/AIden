@@ -189,7 +189,6 @@ tools = Tools()
 
 # --- Capabilities (AIden's view of the machine they're running on) ---
 PROMETHEUS_URL = "http://prometheus:9090"
-MENTOR_URL = os.environ.get("AIDEN_MENTOR_URL", "https://api.anthropic.com/v1/models")
 PROBE_TIMEOUT_S = 2
 CAPABILITIES_CACHE_S = 10
 
@@ -249,13 +248,14 @@ def probe_hardware(name: str) -> HardwareStatus:
     return HardwareStatus(present=present, busy_percent=round(busy, 1) if busy is not None else None)
 
 def probe_mentor() -> MentorStatus:
-    # Any HTTP answer (even 401 without a key) proves the network path to Claude works
+    """The mentor is Claude via the host bridge (Claude Code CLI). Reachable = the bridge
+    answers; configured = it accepts AIden's token and finds the claude CLI."""
     try:
-        requests.get(MENTOR_URL, timeout=PROBE_TIMEOUT_S)
-        reachable = True
-    except requests.RequestException:
-        reachable = False
-    return MentorStatus(name="claude", reachable=reachable, configured=bool(os.environ.get("ANTHROPIC_API_KEY")))
+        response = requests.get(f"{router.MENTOR_URL}/health", headers={"X-Mentor-Token": router.MENTOR_TOKEN}, timeout=PROBE_TIMEOUT_S)
+        body = response.json() if response.status_code == 200 else {}
+        return MentorStatus(name="claude", reachable=True, configured=bool(body.get("ok") and body.get("claude")))
+    except (requests.RequestException, ValueError):
+        return MentorStatus(name="claude", reachable=False, configured=False)
 
 def join_and(items: List[str]) -> str:
     return items[0] if len(items) == 1 else f"{', '.join(items[:-1])} and {items[-1]}"
@@ -274,9 +274,9 @@ def describe(hardware: Dict[str, HardwareStatus], backends: List[BackendStatus],
     if down:
         parts.append(f"Not running here: {join_and(down)}.")
     if not mentor.reachable:
-        parts.append("I'm offline, so I can't ask Claude for help.")
+        parts.append("My mentor bridge isn't running, so I can't ask Claude for help right now.")
     elif not mentor.configured:
-        parts.append("I can reach Claude, but no API key is configured yet.")
+        parts.append("I can reach my mentor bridge, but it isn't set up to ask Claude yet.")
     else:
         parts.append("I'm online and can ask Claude for help.")
     return " ".join(parts)
@@ -458,6 +458,62 @@ meter.create_observable_gauge(
     unit="{notes}"
 )
 
+unsure_counter = meter.create_counter(
+    name="aiden_unsure",
+    description="Answers where the local model said it was unsure",
+    unit="1"
+)
+mentor_counter = meter.create_counter(
+    name="aiden_mentor_calls",
+    description="Questions passed to the Claude mentor, by trigger and outcome",
+    unit="1"
+)
+
+def text_reply(text: str, stream: bool, extra: Optional[Dict[str, Any]] = None):
+    """A reply AIden writes directly (mentor answers, explanations), in the requested format."""
+    if stream:
+        def events():
+            yield router.sse_chunk(text)
+            yield router.sse_chunk("", finish="stop")
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(events(), media_type="text/event-stream")
+    result = {"id": "aiden", "object": "chat.completion", "created": int(time.time()), "model": "aiden",
+              "choices": [{"index": 0, "message": {"role": "assistant", "content": text}, "finish_reason": "stop"}]}
+    if extra:
+        result["aiden"] = extra
+    return result
+
+def mentor_turn(messages: List[Dict[str, Any]], prompt: str, stream: bool):
+    """The user asked for the mentor (or took AIden's offer): ask Claude via the host bridge."""
+    question, draft, took_offer = router.mentor_question(messages, prompt)
+    trigger = "offer" if took_offer else "explicit"
+    with tracer.start_as_current_span("router.mentor") as span:
+        span.set_attribute("mentor.trigger", trigger)
+        span.set_attribute("mentor.question_chars", len(question))
+        span.set_attribute("mentor.draft_included", bool(draft))
+        # The mentor can't see the user's notes, so a question about them can't be answered there
+        about_notes, _, reason = router.needs_notes(question)
+        if about_notes:
+            span.set_attribute("mentor.outcome", "about_notes")
+            mentor_counter.add(1, {"trigger": trigger, "outcome": "about_notes"})
+            logger.info("Mentor not asked: question is about the user's notes (%s)", reason)
+            return text_reply("Claude can't see your notes, so I can't pass this one on as it is. If you rephrase "
+                              "it as a general question, without your private details, I'll ask.", stream)
+        try:
+            answer = router.ask_mentor(question, draft, notes=[])
+        except (requests.RequestException, RuntimeError, ValueError, PermissionError) as exc:
+            span.set_attribute("mentor.outcome", "failed")
+            span.set_attribute("mentor.error", str(exc)[:200])
+            mentor_counter.add(1, {"trigger": trigger, "outcome": "failed"})
+            logger.warning("Mentor call failed: %s", exc)
+            return text_reply(f"I couldn't reach Claude just now ({exc}). We'll have to work this one out between us.", stream)
+        span.set_attribute("mentor.outcome", "answered")
+        span.set_attribute("mentor.duration_ms", answer.get("duration_ms", 0))
+        mentor_counter.add(1, {"trigger": trigger, "outcome": "answered"})
+        logger.info("Mentor answered (%s, %s ms)", trigger, answer.get("duration_ms"))
+        footer = f"\n\n*answered by Claude ({answer.get('model', 'mentor')}) via Claude Code, as my mentor*" if router.SHOW_ROUTE else ""
+        return text_reply(answer["answer"] + footer, stream, {"backend": "mentor", "trigger": trigger, "draft_included": bool(draft)})
+
 @app.get("/v1/models")
 def list_models():
     return {"object": "list", "data": [{"id": "aiden", "object": "model", "owned_by": "aiden"}]}
@@ -471,6 +527,8 @@ def chat_completions(body: Dict[str, Any]):
 
     # The trace explains each decision; it records the prompt's length, never its text
     trace.get_current_span().set_attribute("router.prompt_chars", len(prompt))
+    if router.wants_mentor(prompt):
+        return mentor_turn(messages, prompt, bool(body.get("stream")))
 
     with tracer.start_as_current_span("router.decide") as span:
         start = time.time()
@@ -525,9 +583,16 @@ def chat_completions(body: Dict[str, Any]):
     span.set_attribute("router.skipped", ",".join(skipped))
     logger.info("Answering with %s on %s%s", model, name, f" after {', '.join(skipped)} failed" if skipped else "")
 
-    def finished(tokens: int, seconds: float):
+    caps = get_capabilities()
+    offer_mentor = not wants_notes and caps.mentor.reachable and caps.mentor.configured
+
+    def finished(tokens: int, seconds: float, unsure: bool = False):
         stage_histogram.record(time.time() - start, {"stage": "answer", "backend": name})
         span.set_attribute("router.answer_tokens", tokens)
+        span.set_attribute("router.unsure", unsure)
+        if unsure:
+            unsure_counter.add(1, {"needs_notes": str(wants_notes).lower(), "offered": str(offer_mentor).lower()})
+            logger.info("Local answer was unsure (mentor offered: %s)", offer_mentor)
         if tokens and seconds > 0:
             tokens_histogram.record(tokens / seconds, {"backend": name})
             span.set_attribute("router.tokens_per_second", round(tokens / seconds, 1))
@@ -535,17 +600,19 @@ def chat_completions(body: Dict[str, Any]):
 
     if stream:
         route = router.route_footer(name, model, router.passed_over(name, candidates, skipped))
-        return StreamingResponse(router.stream_answer(response, notes, finished, route), media_type="text/event-stream")
+        return StreamingResponse(router.stream_answer(response, notes, finished, route, offer_mentor), media_type="text/event-stream")
 
     result = response.json()
     usage = result.get("usage", {})
-    finished(usage.get("completion_tokens", 0), time.time() - start)
+    unsure = False
     result["model"] = "aiden"
     if result.get("choices"):
-        answer = result["choices"][0]["message"]["content"]
-        result["choices"][0]["message"]["content"] = (answer + router.sources_footer(notes, answer)
+        answer, unsure = router.split_unsure(result["choices"][0]["message"]["content"])
+        offer = f"\n\n*{router.MENTOR_OFFER}*" if unsure and offer_mentor else ""
+        result["choices"][0]["message"]["content"] = (answer + router.sources_footer(notes, answer) + offer
                                                      + router.route_footer(name, model, router.passed_over(name, candidates, skipped)))
-    result["aiden"] = {"backend": name, "model": model, "skipped": skipped, "needs_notes": wants_notes, "decided_by": decided_by,
+    finished(usage.get("completion_tokens", 0), time.time() - start, unsure)
+    result["aiden"] = {"backend": name, "model": model, "skipped": skipped, "unsure": unsure, "needs_notes": wants_notes, "decided_by": decided_by,
                        "notes": [{"path": n["path"], "heading": n["heading"], "score": n["score"]} for n in notes]}
     return result
 

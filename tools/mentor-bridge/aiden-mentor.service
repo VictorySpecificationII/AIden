@@ -1,0 +1,24 @@
+# User-level systemd service for AIden's mentor bridge (no root needed).
+# Install (adjust the AIden path if yours differs):
+#   mkdir -p ~/.config/systemd/user
+#   cp tools/mentor-bridge/aiden-mentor.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now aiden-mentor
+# Logs: journalctl --user -u aiden-mentor -f
+[Unit]
+Description=AIden mentor bridge (Claude Code CLI on the host)
+After=network-online.target docker.service
+
+[Service]
+WorkingDirectory=%h/Documents/AIden
+EnvironmentFile=%h/Documents/AIden/.env
+# claude lives in ~/.local/bin
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 -I %h/Documents/AIden/tools/mentor-bridge/mentor_bridge.py
+Restart=on-failure
+RestartSec=5
+# The bridge only needs to run the claude CLI
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

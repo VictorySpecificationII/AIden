@@ -27,6 +27,11 @@ CLASSIFIER = {"url": "http://ovms-npu:8001/v3", "model": os.environ.get("OVMS_NP
 ANSWER_BACKENDS = ["ovms-gpu", "ovms-npu", "ollama"]
 OLLAMA_OPENAI_PATH = "/v1"
 MIN_NOTE_SCORE = float(os.environ.get("AIDEN_MIN_NOTE_SCORE", "0.45"))
+# The local model ends its reply with this when it's unsure; the router removes it
+UNSURE_MARKER = "[unsure]"
+MENTOR_URL = os.environ.get("MENTOR_URL", "http://mentor-bridge:8765")
+MENTOR_TOKEN = os.environ.get("MENTOR_TOKEN", "")
+MENTOR_OFFER = "I'm not confident about this one. Say \"ask Claude\" if you'd like a second opinion."
 ANSWER_TIMEOUT_S = 180       # whole non-streamed answer
 STREAM_READ_TIMEOUT_S = 60   # first token / gap between streamed chunks
 MAX_NOTES = 5
@@ -34,7 +39,9 @@ LOCAL_HOSTS = {"ovms-npu", "ovms-gpu", "ollama", "ovms-embed-query", "ovms-embed
 
 SYSTEM_PROMPT = (
     "You are AIden, the user's personal co-pilot running locally on their own machine. "
-    "Be direct and concise."
+    "Be direct and concise. You and the user work things out together: being unsure is "
+    "normal and welcome. If you aren't confident in your answer, say plainly what you're "
+    f"unsure about and why, then end your reply with a final line containing only {UNSURE_MARKER}"
 )
 # Only added when notes are attached, otherwise models invent citations
 NOTES_INSTRUCTION = (
@@ -144,6 +151,69 @@ def sources_footer(notes: List[Dict[str, Any]], answer: str) -> str:
     return "\n\nSources:\n" + "\n".join(lines) if lines else ""
 
 
+# --- Mentor (Claude via the host bridge) --------------------------------------
+
+MENTOR_TRIGGERS = [
+    r"\b(ask|check with|ask your|ask the) (claude|mentor)\b",
+    r"\bsecond opinion\b",
+    r"\bnot sure either\b",
+]
+FOOTER_START = re.compile(r"\n\n(Sources:|\*answered by |\*I'm not confident)")
+
+
+def wants_mentor(prompt: str) -> bool:
+    return any(re.search(p, prompt.lower()) for p in MENTOR_TRIGGERS)
+
+
+def strip_footers(text: str) -> str:
+    match = FOOTER_START.search(text or "")
+    return (text[:match.start()] if match else text or "").strip()
+
+
+def mentor_question(messages: List[Dict[str, Any]], prompt: str) -> Tuple[str, str, bool]:
+    """(question for the mentor, AIden's previous draft or "", whether this follows AIden's offer).
+
+    A bare "ask Claude" refers to the previous question. AIden's previous answer goes along
+    as a draft only when it didn't use the user's notes (it has no Sources footer), because a
+    paraphrase of a note could otherwise leave the machine.
+    """
+    remainder = prompt
+    for pattern in MENTOR_TRIGGERS:
+        remainder = re.sub(pattern, "", remainder, flags=re.IGNORECASE)
+    remainder = remainder.strip(" ,.:;!?-\n")
+    users = [m for m in messages if m.get("role") == "user"]
+    assistants = [m for m in messages if m.get("role") == "assistant"]
+    previous_answer = assistants[-1].get("content", "") if assistants else ""
+    if isinstance(previous_answer, list):
+        previous_answer = " ".join(p.get("text", "") for p in previous_answer if isinstance(p, dict))
+    if len(remainder) >= 15 or len(users) < 2:
+        question = remainder or prompt
+        draft = ""
+    else:
+        question = users[-2].get("content", "") if isinstance(users[-2].get("content"), str) else ""
+        draft = "" if "\n\nSources:" in previous_answer else strip_footers(previous_answer)
+    return question, draft, MENTOR_OFFER[:30] in previous_answer
+
+
+def ask_mentor(question: str, draft: str, notes: List[Dict[str, Any]]) -> Dict[str, Any]:
+    payload = {"question": question, "draft": draft}
+    url = f"{MENTOR_URL}/ask"
+    check_outbound(url, payload, notes)
+    response = requests.post(url, json=payload, headers={"X-Mentor-Token": MENTOR_TOKEN}, timeout=(5, 200))
+    body = response.json()
+    if response.status_code != 200:
+        raise RuntimeError(body.get("error", f"mentor returned {response.status_code}"))
+    return body
+
+
+def split_unsure(text: str) -> Tuple[str, bool]:
+    """Remove the unsure marker from the end of a reply; (text, was it there)."""
+    stripped = text.rstrip()
+    if stripped.endswith(UNSURE_MARKER):
+        return stripped[: -len(UNSURE_MARKER)].rstrip(), True
+    return text, False
+
+
 # --- Step 3: answer -----------------------------------------------------------
 
 def check_outbound(url: str, payload: Dict[str, Any], notes: List[Dict[str, Any]]):
@@ -221,9 +291,13 @@ def sse_chunk(content: str, finish: Optional[str] = None) -> str:
     return f"data: {json.dumps(chunk)}\n\n"
 
 
-def stream_answer(response: requests.Response, notes, on_done, route: str = "") -> Iterator[str]:
-    """Relay the backend's SSE stream, add the sources and route footers before [DONE]."""
-    tokens, start, answer = 0, time.time(), []
+def stream_answer(response: requests.Response, notes, on_done, route: str = "", offer_mentor: bool = False) -> Iterator[str]:
+    """Relay the backend's SSE stream, add the sources and route footers before [DONE].
+
+    The last few characters are held back until the end, so the unsure marker can be
+    removed before it reaches the user."""
+    tokens, start, answer, pending = 0, time.time(), [], ""
+    hold = len(UNSURE_MARKER) + 4
     # SSE responses carry no charset, and requests would otherwise decode them as Latin-1
     response.encoding = "utf-8"
     for line in response.iter_lines(decode_unicode=True):
@@ -235,15 +309,23 @@ def stream_answer(response: requests.Response, notes, on_done, route: str = "") 
         try:
             chunk = json.loads(data)
             content = chunk["choices"][0].get("delta", {}).get("content") if chunk["choices"] else None
-            if content:
-                tokens += 1
-                answer.append(content)
-            chunk["model"] = "aiden"
-            yield f"data: {json.dumps(chunk)}\n\n"
+            if not content:
+                continue
+            tokens += 1
+            answer.append(content)
+            pending += content
+            if len(pending) > hold:
+                yield sse_chunk(pending[:-hold])
+                pending = pending[-hold:]
         except (ValueError, KeyError, IndexError):
             continue
-    footer = sources_footer(notes, "".join(answer)) + route
+    text, unsure = split_unsure("".join(answer))
+    pending, _ = split_unsure(pending)
+    footer = (pending if text.endswith(pending) else "") + sources_footer(notes, text)
+    if unsure and offer_mentor:
+        footer += f"\n\n*{MENTOR_OFFER}*"
+    footer += route
     if footer:
         yield sse_chunk(footer)
     yield "data: [DONE]\n\n"
-    on_done(tokens, time.time() - start)
+    on_done(tokens, time.time() - start, unsure)
