@@ -245,12 +245,9 @@ services:
       # The router's request classifier runs on the NPU model
       - OVMS_NPU_MODEL_NAME=${OVMS_NPU_MODEL_NAME:?}
       - AIDEN_SHOW_ROUTE=${AIDEN_SHOW_ROUTE:-true}
-      # Mentor: Claude via the host bridge (tools/mentor-bridge); optional
+      # Mentor: Claude via the mentor-bridge service (profile mentor); optional
       - MENTOR_URL=http://mentor-bridge:8765
       - MENTOR_TOKEN=${MENTOR_TOKEN:-}
-    extra_hosts:
-      # The bridge listens on the host's docker0 address only
-      - mentor-bridge:host-gateway
     volumes:
       # The user's Obsidian vault, read-only: AIden indexes it for search (see vault.py)
       - ${VAULT_PATH:?}:/vault:ro
@@ -400,6 +397,31 @@ services:
       prometheus.scrape: "true"
       prometheus.port: "8001"
       prometheus.job: "ovms-npu"
+
+  # AIden's mentor: Claude via the Claude Code CLI, asked only for questions without the
+  # user's notes. Auth is a long-lived subscription token (claude setup-token) from .env;
+  # the host's ~/.claude is never mounted. No published port: only AIden calls it.
+  mentor-bridge:
+    profiles: [mentor]
+    build:
+      context: ./tools/mentor-bridge
+    image: intellectualplayspace/mentor-bridge:claude-code-2.1.296
+    pull_policy: build
+    container_name: mentor-bridge
+    restart: unless-stopped
+    environment:
+      - MENTOR_TOKEN=${MENTOR_TOKEN:?}
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      - MENTOR_MAX_PER_HOUR=${MENTOR_MAX_PER_HOUR:-10}
+      - MENTOR_MODEL=${MENTOR_MODEL:-}
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /home/mentor
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks:
+      - dev
 
   # Text embeddings for vault search (OpenAI-compatible /v3/embeddings), split by task:
   # - ovms-cpu-embed (always on, alias ovms-embed-query): search queries; short inputs

@@ -1,26 +1,29 @@
-"""AIden's mentor bridge: lets AIden ask Claude through the Claude Code CLI on the host.
+"""AIden's mentor bridge: lets AIden ask Claude through the Claude Code CLI.
 
-Runs on the host (where Claude Code is logged in), not in a container, so the user's
-credentials never enter the stack. AIden calls POST /ask over the Docker bridge.
+Runs in its own container (compose profile "mentor"), authenticated with a long-lived
+subscription token (CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`). The user's
+~/.claude (login, CLAUDE.md, memories, history) is never mounted. AIden calls POST /ask
+on the dev network.
 
 Each question runs as:
     claude -p --tools "" --setting-sources project --strict-mcp-config
            --no-session-persistence --output-format json --system-prompt ...
-from an empty working directory: no tools (a crafted question can't make Claude Code
-act on the host), and none of the user's own CLAUDE.md, memories or MCP servers.
+from an empty working directory: no tools, so a crafted question can't make Claude Code
+act on anything, and no settings, memories or MCP servers.
 
 Guard rails: shared token, one call at a time, MENTOR_MAX_PER_HOUR calls per hour,
 timeout. Only the question (and AIden's draft, when it didn't use the user's notes)
 ever reaches it; AIden's router enforces that before calling.
 
-Configuration (environment, e.g. systemd EnvironmentFile=AIden/.env):
-    MENTOR_TOKEN          required, shared with the aiden service
-    MENTOR_BIND           default 172.17.0.1 (docker0: containers only, not the LAN)
-    MENTOR_PORT           default 8765
-    MENTOR_MAX_PER_HOUR   default 10
-    MENTOR_MODEL          optional, e.g. a smaller model to save limits
-    MENTOR_TIMEOUT_S      default 180
-    CLAUDE_BIN            default: claude on PATH
+Configuration (environment):
+    MENTOR_TOKEN             required, shared with the aiden service
+    CLAUDE_CODE_OAUTH_TOKEN  Claude Code auth (read by the claude CLI itself)
+    MENTOR_BIND              default 0.0.0.0 in the container (no published port)
+    MENTOR_PORT              default 8765
+    MENTOR_MAX_PER_HOUR      default 10
+    MENTOR_MODEL             optional, e.g. a smaller model to save limits
+    MENTOR_TIMEOUT_S         default 180
+    CLAUDE_BIN               default: claude on PATH
 """
 import json
 import logging
@@ -34,7 +37,7 @@ from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 TOKEN = os.environ.get("MENTOR_TOKEN", "")
-BIND = os.environ.get("MENTOR_BIND", "172.17.0.1")
+BIND = os.environ.get("MENTOR_BIND", "0.0.0.0")
 PORT = int(os.environ.get("MENTOR_PORT", "8765"))
 MAX_PER_HOUR = int(os.environ.get("MENTOR_MAX_PER_HOUR", "10"))
 MODEL = os.environ.get("MENTOR_MODEL", "")
@@ -99,7 +102,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self.authorised():
             return self.reply(401, {"error": "unauthorised"})
         self.reply(200, {"ok": True, "calls_left_this_hour": calls_left(), "busy": busy.locked(),
-                         "claude": os.path.exists(CLAUDE_BIN) or bool(shutil.which(CLAUDE_BIN))})
+                         "claude": bool(shutil.which(CLAUDE_BIN)),
+                         "authenticated": bool(os.environ.get("CLAUDE_CODE_OAUTH_TOKEN") or os.environ.get("ANTHROPIC_API_KEY"))})
 
     def do_POST(self):
         if self.path != "/ask":

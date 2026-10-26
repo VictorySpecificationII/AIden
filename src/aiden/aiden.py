@@ -248,12 +248,13 @@ def probe_hardware(name: str) -> HardwareStatus:
     return HardwareStatus(present=present, busy_percent=round(busy, 1) if busy is not None else None)
 
 def probe_mentor() -> MentorStatus:
-    """The mentor is Claude via the host bridge (Claude Code CLI). Reachable = the bridge
-    answers; configured = it accepts AIden's token and finds the claude CLI."""
+    """The mentor is Claude via the mentor-bridge service (Claude Code CLI). Reachable = the
+    bridge answers; configured = it accepts AIden's token, has the CLI and a Claude login token."""
     try:
         response = requests.get(f"{router.MENTOR_URL}/health", headers={"X-Mentor-Token": router.MENTOR_TOKEN}, timeout=PROBE_TIMEOUT_S)
         body = response.json() if response.status_code == 200 else {}
-        return MentorStatus(name="claude", reachable=True, configured=bool(body.get("ok") and body.get("claude")))
+        return MentorStatus(name="claude", reachable=True,
+                            configured=bool(body.get("ok") and body.get("claude") and body.get("authenticated")))
     except (requests.RequestException, ValueError):
         return MentorStatus(name="claude", reachable=False, configured=False)
 

@@ -54,6 +54,15 @@ for dev in /dev/dri/renderD* /dev/accel/accel*; do
 done
 docker_gid=$(getent group docker | cut -d: -f3 || true)
 
+# Keep profiles that aren't about hardware (e.g. mentor, elk) that you've already enabled
+if [ -f "$ENV_FILE" ]; then
+    current=$(grep -E '^COMPOSE_PROFILES=' "$ENV_FILE" | tail -1 | cut -d= -f2- | tr -d '"')
+    IFS=',' read -ra current_list <<< "$current"
+    for p in "${current_list[@]}"; do
+        case "$p" in nvidia|cpu|npu|intel-gpu|"") ;; *) profiles+=("$p") ;; esac
+    done
+fi
+
 join() { local IFS="$1"; shift; echo "$*"; }
 PROFILES=$(join , "${profiles[@]}")
 URLS=$(join ";" "${urls[@]+"${urls[@]}"}")
