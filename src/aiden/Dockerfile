@@ -24,8 +24,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy source code
 COPY . .
 
-# Set file permissions
-RUN chown -R $USER:$USER $APP_HOME
+# Set file permissions; /data/experience is where the aiden-experience volume is mounted,
+# created here so the new volume inherits the service user's ownership
+RUN mkdir -p /data/experience && chown -R $USER:$USER $APP_HOME /data/experience
 USER $USER
 
 # Run the app

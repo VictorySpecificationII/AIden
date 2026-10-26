@@ -80,12 +80,19 @@ def test_no_sources_footer_when_nothing_is_cited():
 
 
 @pytest.mark.parametrize("text, expected", [
-    ("I can't know that.\n[unsure]", ("I can't know that.", True)),
-    ("I can't know that.\n[unsure]\n\n", ("I can't know that.", True)),
-    ("Paris is the capital of France.", ("Paris is the capital of France.", False)),
+    ("I can't know.\nConfidence: low", ("I can't know.", "low")),
+    ("Paris.\n\n**Confidence: high**\n\n", ("Paris.", "high")),
+    ("Probably 7.\n*Confidence:* Medium.", ("Probably 7.", "medium")),
+    ("No confidence line here.", ("No confidence line here.", None)),
 ])
-def test_unsure_marker_is_detected_and_removed(text, expected):
-    assert router.split_unsure(text) == expected
+def test_confidence_line_is_read_and_removed(text, expected):
+    assert router.split_confidence(text) == expected
+
+
+def test_only_low_confidence_counts_as_unsure():
+    assert router.split_unsure("x\nConfidence: low") == ("x", True)
+    assert router.split_unsure("x\nConfidence: medium") == ("x", False)
+    assert router.split_unsure("x") == ("x", False)
 
 
 # --- Backends, fallback naming --------------------------------------------------
@@ -162,7 +169,8 @@ class FakeStream:
 def relay(parts, notes=(), offer_mentor=True, route=""):
     done = {}
     events = list(router.stream_answer(FakeStream(parts), list(notes),
-                                       lambda tokens, seconds, unsure: done.update(tokens=tokens, unsure=unsure),
+                                       lambda tokens, seconds, unsure, text, confidence: done.update(
+                                           tokens=tokens, unsure=unsure, text=text, confidence=confidence),
                                        route, offer_mentor))
     text = "".join(json.loads(e[6:])["choices"][0]["delta"].get("content") or ""
                    for e in events if e.startswith("data: {"))
@@ -170,27 +178,33 @@ def relay(parts, notes=(), offer_mentor=True, route=""):
 
 
 def test_streamed_answer_arrives_complete_and_ends_with_done():
-    text, done, events = relay(["Paris is ", "the capital ", "of France."], route="\n\n*answered by x*")
-    assert text == "Paris is the capital of France.\n\n*answered by x*"
-    assert events[-1] == "data: [DONE]\n\n" and done == {"tokens": 3, "unsure": False}
+    text, done, events = relay(["Paris is ", "the capital ", "of France.", "\nConfidence: high"], route="\n\n*answered by x*")
+    assert text == "Paris is the capital of France.\n\n*answered by x*"  # confidence line removed
+    assert events[-1] == "data: [DONE]\n\n"
+    assert done == {"tokens": 4, "unsure": False, "confidence": "high", "text": "Paris is the capital of France."}
 
 
 @pytest.mark.parametrize("parts", [
-    ["I think about 1.1, ", "but I can't know.", "\n[unsure]"],
-    ["I think about 1.1, but I can't know.\n[un", "sure]"],
-    ["I think about 1.1, but I can't know.", "\n[unsure]", "\n\n\n\n\n\n"],  # whitespace after the marker
-    ["I think about 1.1, but I can't know.\n[unsure]", " ", "\n" * 10],
+    ["I think about 1.1, ", "but I can't know.", "\nConfidence: low"],
+    ["I think about 1.1, but I can't know.\nConfi", "dence: l", "ow"],                     # split across chunks
+    ["I think about 1.1, but I can't know.", "\n\n**Confidence: low**", "\n\n\n\n\n\n"],  # bold, then whitespace
+    ["I think about 1.1, but I can't know.\nConfidence: low", " ", "\n" * 10],
 ])
-def test_unsure_marker_never_reaches_the_user(parts):
+def test_confidence_line_never_reaches_the_user(parts):
     text, done, _ = relay(parts)
     answer, offer = text.split("\n\n*", 1)
-    # Not even a fragment of the marker may be shown
+    # Not even a fragment of the confidence line may be shown
     assert answer.rstrip() == "I think about 1.1, but I can't know."
-    assert done["unsure"] is True and "second opinion" in offer
+    assert done["unsure"] is True and done["confidence"] == "low" and "second opinion" in offer
+
+
+def test_high_confidence_brings_no_offer():
+    text, done, _ = relay(["Paris is the capital of France.\n", "Confidence: hi", "gh"])
+    assert text == "Paris is the capital of France." and done["unsure"] is False
 
 
 def test_no_mentor_offer_when_not_allowed():
-    text, done, _ = relay(["I can't know.\n[unsure]"], offer_mentor=False)
+    text, done, _ = relay(["I can't know.\nConfidence: low"], offer_mentor=False)
     assert done["unsure"] is True and "second opinion" not in text
 
 

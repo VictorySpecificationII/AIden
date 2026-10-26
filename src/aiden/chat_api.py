@@ -11,6 +11,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse, StreamingResponse
 from opentelemetry import trace
 
+import experience
 import mentor
 import router
 from capabilities import get_capabilities
@@ -46,6 +47,19 @@ unsure_counter = meter.create_counter(
     description="Answers where the local model said it was unsure",
     unit="1"
 )
+experience_counter = meter.create_counter(
+    name="aiden_experience_records",
+    description="Experience records written (AIden's training data)",
+    unit="1"
+)
+
+def current_trace_id() -> str:
+    return format(trace.get_current_span().get_span_context().trace_id, "032x")
+
+def remember(kind: str, fields: Dict[str, Any]):
+    if experience.record(kind, fields):
+        experience_counter.add(1, {"kind": kind})
+
 mentor_counter = meter.create_counter(
     name="aiden_mentor_calls",
     description="Questions passed to the Claude mentor, by trigger and outcome",
@@ -80,6 +94,8 @@ def mentor_turn(messages: List[Dict[str, Any]], prompt: str, stream: bool):
             span.set_attribute("mentor.outcome", "about_notes")
             mentor_counter.add(1, {"trigger": trigger, "outcome": "about_notes"})
             logger.info("Mentor not asked: question is about the user's notes (%s)", reason)
+            remember("mentor", {"trace_id": current_trace_id(), "trigger": trigger, "prompt": prompt, "question": question,
+                                "outcome": "about_notes", "reason": reason})
             return text_reply("Claude can't see your notes, so I can't pass this one on as it is. If you rephrase "
                               "it as a general question, without your private details, I'll ask.", stream)
         # The draft goes along only if it doesn't resemble the user's notes; the closest notes
@@ -99,11 +115,16 @@ def mentor_turn(messages: List[Dict[str, Any]], prompt: str, stream: bool):
             span.set_attribute("mentor.error", str(exc)[:200])
             mentor_counter.add(1, {"trigger": trigger, "outcome": "failed"})
             logger.warning("Mentor call failed: %s", exc)
+            remember("mentor", {"trace_id": current_trace_id(), "trigger": trigger, "prompt": prompt, "question": question,
+                                "draft_included": bool(draft), "outcome": "failed", "error": str(exc)[:200]})
             return text_reply(f"I couldn't reach Claude just now ({exc}). We'll have to work this one out between us.", stream)
         span.set_attribute("mentor.outcome", "answered")
         span.set_attribute("mentor.duration_ms", answer.get("duration_ms", 0))
         mentor_counter.add(1, {"trigger": trigger, "outcome": "answered"})
         logger.info("Mentor answered (%s, %s ms)", trigger, answer.get("duration_ms"))
+        remember("mentor", {"trace_id": current_trace_id(), "trigger": trigger, "prompt": prompt, "question": question,
+                            "draft_included": bool(draft), "outcome": "answered", "source": "claude",
+                            "model": answer.get("model"), "duration_ms": answer.get("duration_ms"), "answer": answer["answer"]})
         footer = f"\n\n*answered by Claude ({answer.get('model', 'mentor')}) via Claude Code, as my mentor*" if router.SHOW_ROUTE else ""
         return text_reply(answer["answer"] + footer, stream, {"backend": "mentor", "trigger": trigger, "draft_included": bool(draft)})
 
@@ -178,11 +199,25 @@ def chat_completions(body: Dict[str, Any]):
 
     caps = get_capabilities()
     offer_mentor = not wants_notes and caps.mentor.reachable and caps.mentor.configured
+    trace_id = current_trace_id()
 
-    def finished(tokens: int, seconds: float, unsure: bool = False):
+    def finished(tokens: int, seconds: float, unsure: bool = False, text: str = "", confidence: Optional[str] = None):
+        remember("turn", {
+            "trace_id": trace_id, "prompt": prompt, "prompt_chars": len(prompt), "turns_in_conversation": len(messages),
+            "decision": {"needs_notes": wants_notes, "decided_by": decided_by, "reason": reason},
+            # Paths and scores only: note text is never recorded
+            "notes": [{"path": n["path"], "heading": n["heading"], "score": n["score"]} for n in notes],
+            "answer": {"source": "local", "backend": name, "model": model, "skipped": skipped, "stream": stream,
+                       "used_notes": bool(notes), "confidence": confidence, "unsure": unsure,
+                       "mentor_offered": unsure and offer_mentor,
+                       "tokens": tokens, "seconds": round(seconds, 2),
+                       "tokens_per_second": round(tokens / seconds, 1) if tokens and seconds > 0 else None,
+                       "text": text},
+        })
         stage_histogram.record(time.time() - start, {"stage": "answer", "backend": name})
         span.set_attribute("router.answer_tokens", tokens)
         span.set_attribute("router.unsure", unsure)
+        span.set_attribute("router.confidence", confidence or "missing")
         if unsure:
             unsure_counter.add(1, {"needs_notes": str(wants_notes).lower(), "offered": str(offer_mentor).lower()})
             logger.info("Local answer was unsure (mentor offered: %s)", offer_mentor)
@@ -197,14 +232,15 @@ def chat_completions(body: Dict[str, Any]):
 
     result = response.json()
     usage = result.get("usage", {})
-    unsure = False
+    unsure, confidence = False, None
     result["model"] = "aiden"
     if result.get("choices"):
-        answer, unsure = router.split_unsure(result["choices"][0]["message"]["content"])
+        answer, confidence = router.split_confidence(result["choices"][0]["message"]["content"])
+        unsure = confidence == "low"
         offer = f"\n\n*{router.MENTOR_OFFER}*" if unsure and offer_mentor else ""
         result["choices"][0]["message"]["content"] = (answer + router.sources_footer(notes, answer) + offer
                                                      + router.route_footer(name, model, router.passed_over(name, candidates, skipped)))
-    finished(usage.get("completion_tokens", 0), time.time() - start, unsure)
+    finished(usage.get("completion_tokens", 0), time.time() - start, unsure, answer if result.get("choices") else "", confidence)
     result["aiden"] = {"backend": name, "model": model, "skipped": skipped, "unsure": unsure, "needs_notes": wants_notes, "decided_by": decided_by,
                        "notes": [{"path": n["path"], "heading": n["heading"], "score": n["score"]} for n in notes]}
     return result

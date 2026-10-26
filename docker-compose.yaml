@@ -245,12 +245,15 @@ services:
       # The router's request classifier runs on the NPU model
       - OVMS_NPU_MODEL_NAME=${OVMS_NPU_MODEL_NAME:?}
       - AIDEN_SHOW_ROUTE=${AIDEN_SHOW_ROUTE:-true}
+      - AIDEN_RECORD_EXPERIENCE=${AIDEN_RECORD_EXPERIENCE:-true}
       # Mentor: Claude via the mentor-bridge service (profile mentor); optional
       - MENTOR_URL=http://mentor-bridge:8765
       - MENTOR_TOKEN=${MENTOR_TOKEN:-}
     volumes:
       # The user's Obsidian vault, read-only: AIden indexes it for search (see vault.py)
       - ${VAULT_PATH:?}:/vault:ro
+      # AIden's experience (prompts, decisions, answers): training data, local only
+      - aiden-experience:/data/experience
     ports:
       # Localhost only: the API can read the vault. OpenWebUI reaches it over the dev network.
       - "127.0.0.1:8000:8000"
@@ -649,3 +652,4 @@ volumes:
   qdrant-data:
   ovms-data:
   loki-data:
+  aiden-experience:

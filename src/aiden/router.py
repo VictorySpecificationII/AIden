@@ -27,8 +27,11 @@ CLASSIFIER = {"url": "http://ovms-npu:8001/v3", "model": os.environ.get("OVMS_NP
 ANSWER_BACKENDS = ["ovms-gpu", "ovms-npu", "ollama"]
 OLLAMA_OPENAI_PATH = "/v1"
 MIN_NOTE_SCORE = float(os.environ.get("AIDEN_MIN_NOTE_SCORE", "0.45"))
-# The local model ends its reply with this when it's unsure; the router removes it
-UNSURE_MARKER = "[unsure]"
+# The local model ends every reply with "Confidence: high|medium|low"; the router removes
+# that line and treats "low" as doubt. (A marker the model should add "only when unsure"
+# didn't work: Qwen3-8B added it to every answer, even "12 times 12".)
+CONFIDENCE_LINE = re.compile(r"\n?[ \t*_]*confidence[ \t*_]*:[ \t*_]*(high|medium|low)[ \t*_.]*\s*$", re.IGNORECASE)
+CONFIDENCE_HOLD = len("**Confidence: medium**") + 4
 MENTOR_OFFER = "I'm not confident about this one. Say \"ask Claude\" if you'd like a second opinion."
 ANSWER_TIMEOUT_S = 180       # whole non-streamed answer
 STREAM_READ_TIMEOUT_S = 60   # first token / gap between streamed chunks
@@ -37,9 +40,12 @@ LOCAL_HOSTS = {"ovms-npu", "ovms-gpu", "ollama", "ovms-embed-query", "ovms-embed
 
 SYSTEM_PROMPT = (
     "You are AIden, the user's personal co-pilot running locally on their own machine. "
-    "Be direct and concise. You and the user work things out together: being unsure is "
-    "normal and welcome. If you aren't confident in your answer, say plainly what you're "
-    f"unsure about and why, then end your reply with a final line containing only {UNSURE_MARKER}"
+    "Be direct and concise. You and the user work things out together, and being unsure is "
+    "normal and welcome. End every reply with a final line 'Confidence: high', "
+    "'Confidence: medium' or 'Confidence: low'. Use high for well-known facts, definitions, "
+    "arithmetic and anything you clearly know. Use low when you may well be wrong: events or "
+    "releases after your training data, predictions, niche specifics you can't verify, or "
+    "guesses; then also say what you're unsure about and why."
 )
 # Only added when notes are attached, otherwise models invent citations
 NOTES_INSTRUCTION = (
@@ -149,12 +155,18 @@ def sources_footer(notes: List[Dict[str, Any]], answer: str) -> str:
     return "\n\nSources:\n" + "\n".join(lines) if lines else ""
 
 
+def split_confidence(text: str) -> Tuple[str, Optional[str]]:
+    """Remove the trailing confidence line; (text, "high"/"medium"/"low" or None)."""
+    match = CONFIDENCE_LINE.search(text)
+    if not match:
+        return text, None
+    return text[:match.start()].rstrip(), match.group(1).lower()
+
+
 def split_unsure(text: str) -> Tuple[str, bool]:
-    """Remove the unsure marker from the end of a reply; (text, was it there)."""
-    stripped = text.rstrip()
-    if stripped.endswith(UNSURE_MARKER):
-        return stripped[: -len(UNSURE_MARKER)].rstrip(), True
-    return text, False
+    """(text without the confidence line, whether the model said its confidence is low)."""
+    stripped, level = split_confidence(text)
+    return stripped, level == "low"
 
 
 # --- Step 3: answer -----------------------------------------------------------
@@ -237,10 +249,10 @@ def sse_chunk(content: str, finish: Optional[str] = None) -> str:
 def stream_answer(response: requests.Response, notes, on_done, route: str = "", offer_mentor: bool = False) -> Iterator[str]:
     """Relay the backend's SSE stream, add the sources and route footers before [DONE].
 
-    The last few characters are held back until the end, so the unsure marker can be
+    The last few characters are held back until the end, so the confidence line can be
     removed before it reaches the user."""
     tokens, start, answer, pending = 0, time.time(), [], ""
-    hold = len(UNSURE_MARKER) + 4
+    hold = CONFIDENCE_HOLD
     # SSE responses carry no charset, and requests would otherwise decode them as Latin-1
     response.encoding = "utf-8"
     for line in response.iter_lines(decode_unicode=True):
@@ -265,8 +277,9 @@ def stream_answer(response: requests.Response, notes, on_done, route: str = "", 
                 pending = pending[cut:]
         except (ValueError, KeyError, IndexError):
             continue
-    text, unsure = split_unsure("".join(answer))
-    pending, _ = split_unsure(pending)
+    text, confidence = split_confidence("".join(answer))
+    unsure = confidence == "low"
+    pending, _ = split_confidence(pending)
     footer = (pending if text.endswith(pending) else "") + sources_footer(notes, text)
     if unsure and offer_mentor:
         footer += f"\n\n*{MENTOR_OFFER}*"
@@ -274,4 +287,4 @@ def stream_answer(response: requests.Response, notes, on_done, route: str = "", 
     if footer:
         yield sse_chunk(footer)
     yield "data: [DONE]\n\n"
-    on_done(tokens, time.time() - start, unsure)
+    on_done(tokens, time.time() - start, unsure, text, confidence)
