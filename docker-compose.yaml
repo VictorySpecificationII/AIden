@@ -249,6 +249,9 @@ services:
       # Mentor: Claude via the mentor-bridge service (profile mentor); optional
       - MENTOR_URL=http://mentor-bridge:8765
       - MENTOR_TOKEN=${MENTOR_TOKEN:-}
+      # Your ratings in OpenWebUI become experience too (see feedback.py); optional
+      - OPENWEBUI_URL=http://ollama-webui:8080
+      - OPENWEBUI_API_KEY=${OPENWEBUI_API_KEY:-}
     volumes:
       # The user's Obsidian vault, read-only: AIden indexes it for search (see vault.py)
       - ${VAULT_PATH:?}:/vault:ro
