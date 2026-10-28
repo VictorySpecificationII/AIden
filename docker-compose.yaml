@@ -238,6 +238,10 @@ services:
       dockerfile: Dockerfile
     image: intellectualplayspace/aiden
     container_name: AIden
+    # The vault indexer embeds notes at startup: wait until the embeddings model is loaded
+    depends_on:
+      ovms-cpu-embed:
+        condition: service_healthy
     environment:
       # Lets AIden report which profiles this machine runs (see /capabilities)
       - AIDEN_PROFILES=${COMPOSE_PROFILES:?}
@@ -290,7 +294,6 @@ services:
     volumes:
       - ollama-data-gpu:/root/.ollama
     container_name: ollama
-    pull_policy: always
     tty: true
     restart: unless-stopped
     image: docker.io/ollama/ollama:latest
