@@ -12,6 +12,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 
 import mentor
+import senses
 from telemetry import tracer
 
 api = APIRouter()
@@ -29,6 +30,9 @@ class BackendStatus(BaseModel):
     models: List[str] = []
     latency_ms: Optional[float] = None
     error: Optional[str] = None
+    # From AIden's last generation probe (see senses.py); None = not probed yet
+    generating: Optional[bool] = None
+    generating_checked_at: Optional[str] = None
 
 class MentorStatus(BaseModel):
     name: str
@@ -83,11 +87,15 @@ def probe_backend(backend: Dict[str, str]) -> BackendStatus:
             models = [m["id"] for m in body.get("data", [])]
         else:
             models = [m["name"] for m in body.get("models", [])]
-        return BackendStatus(name=backend["name"], tier=tier, url=backend["url"], available=True,
-                             models=models, latency_ms=round((time.time() - start) * 1000, 1))
+        status = BackendStatus(name=backend["name"], tier=tier, url=backend["url"], available=True,
+                               models=models, latency_ms=round((time.time() - start) * 1000, 1))
     except (requests.RequestException, ValueError, KeyError) as exc:
-        return BackendStatus(name=backend["name"], tier=tier, url=backend["url"], available=False,
-                             error=type(exc).__name__)
+        status = BackendStatus(name=backend["name"], tier=tier, url=backend["url"], available=False,
+                               error=type(exc).__name__)
+    sensed = senses.status.get(backend["name"])
+    if sensed:
+        status.generating, status.generating_checked_at = sensed["generating"], sensed["checked_at"]
+    return status
 
 def prometheus_value(query: str) -> Optional[float]:
     try:
@@ -124,12 +132,15 @@ def describe(hardware: Dict[str, HardwareStatus], backends: List[BackendStatus],
     serving = [f"{join_and(b.models)} on {tiers[b.tier]}" for b in backends if b.available and b.models]
     empty = [f"{b.name} ({tiers[b.tier]})" for b in backends if b.available and not b.models]
     down = [b.name for b in backends if not b.available]
+    stuck = [tiers[b.tier] for b in backends if b.available and b.generating is False]
     parts = [f"I'm running on a machine with {join_and(found) if found else 'no accelerators I can see'}."]
     parts.append(f"I can answer with {join_and(serving)}." if serving else "None of my local models are available right now.")
     if empty:
         parts.append(f"{join_and(empty)} {'is' if len(empty) == 1 else 'are'} running but {'has' if len(empty) == 1 else 'have'} no models yet.")
     if down:
         parts.append(f"Not running here: {join_and(down)}.")
+    if stuck:
+        parts.append(f"My model on {join_and(stuck)} is up but couldn't answer at my last check, so my answers may fall back to the next model.")
     if not mentor.reachable:
         parts.append("My mentor bridge isn't running, so I can't ask Claude for help right now.")
     elif not mentor.configured:

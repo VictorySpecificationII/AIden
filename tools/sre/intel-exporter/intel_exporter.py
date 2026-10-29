@@ -4,6 +4,8 @@
 - GPU (i915 driver):      /sys/class/drm/cardN/ with PCI vendor 0x8086
   Busy time is derived in PromQL from the per-GT idle (RC6) residency counter:
   busy % = 100 * (1 - rate(intel_gpu_rc6_seconds_total[1m])).
+- Host suspends: /sys/power/suspend_stats/. The iGPU's compute side can degrade after
+  many suspend cycles, so these sit next to AIden's generation probes in Grafana.
 
 The host's /sys is mounted read-only at SYSFS_ROOT. Values are read on every
 scrape, so there is no polling loop and no state. Standard library only.
@@ -79,10 +81,24 @@ def collect_gpu(lines):
                     lines.append(f"{name}{{{labels}}} {round(int(value) * scale, 6)}")
 
 
+def collect_suspend(lines):
+    stats = os.path.join(SYSFS_ROOT, "power/suspend_stats")
+    for sysfs_file, name, kind, help_text, scale in [
+        ("success", "host_suspends_total", "counter", "Successful suspends since boot", 1),
+        ("fail", "host_suspend_failures_total", "counter", "Failed suspends since boot", 1),
+        ("last_hw_sleep", "host_last_hw_sleep_seconds", "gauge", "Hardware sleep time of the last s2idle suspend", 1e-6),
+    ]:
+        value = read(os.path.join(stats, sysfs_file))
+        if value is not None:
+            header(lines, name, kind, help_text)
+            lines.append(f"{name} {round(int(value) * scale, 6)}")
+
+
 def collect():
     lines = []
     collect_npu(lines)
     collect_gpu(lines)
+    collect_suspend(lines)
     return "\n".join(lines) + "\n"
 
 

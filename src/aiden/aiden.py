@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import capabilities
 import chat_api
 import feedback
+import senses
 import tools
 import vault
 import vault_api
@@ -68,6 +69,7 @@ async def telemetry_middleware(request: Request, call_next):
 def start_background_work():
     vault.start(tracer)
     feedback.start()
+    senses.start()
 
 app.include_router(tools.api)
 app.include_router(vault_api.api)

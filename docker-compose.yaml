@@ -4,6 +4,7 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector:latest
     container_name: otel-collector
+    restart: unless-stopped
     command: ["--config=/etc/otel-collector-config.yaml"]
     networks:
       - dev
@@ -37,12 +38,14 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
+    restart: unless-stopped
     networks:
       - dev
     ports:
       - "9090:9090"     # Prometheus web interface
     volumes:
       - ./tools/sre/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./tools/sre/prometheus/rules:/etc/prometheus/rules:ro
       # Docker service discovery for profile-dependent exporters (see prometheus.yml)
       - /var/run/docker.sock:/var/run/docker.sock:ro
     group_add:
@@ -71,6 +74,7 @@ services:
   jaeger:
     image: jaegertracing/all-in-one:1.60
     container_name: jaeger
+    restart: unless-stopped
     networks:
       - dev
     command: ["--collector.otlp.enabled=true", "--collector.otlp.grpc.host-port=4320", "--collector.otlp.http.host-port=4321"]
@@ -189,6 +193,7 @@ services:
   grafana:
     image: grafana/grafana:13.2.4
     container_name: grafana
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
@@ -225,6 +230,7 @@ services:
   homepage:
     image: ghcr.io/gethomepage/homepage:latest
     container_name: homepage
+    restart: unless-stopped
     ports:
       - 8092:3000
     volumes:
@@ -242,6 +248,7 @@ services:
       dockerfile: Dockerfile
     image: intellectualplayspace/aiden
     container_name: AIden
+    restart: unless-stopped
     # The vault indexer embeds notes at startup: wait until the embeddings model is loaded
     depends_on:
       ovms-cpu-embed:

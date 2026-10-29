@@ -1,0 +1,16 @@
+# AIden's own health. aiden_backend_generating_ratio comes from AIden's probes (senses.py):
+# every 15 minutes each local model is asked for one token.
+groups:
+  - name: aiden
+    rules:
+      - alert: AIdenModelNotGenerating
+        expr: aiden_backend_generating_ratio == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.backend }} is up but can't generate"
+          description: >-
+            AIden's last probe of {{ $labels.backend }} got no answer, so requests fall back to
+            the next model. On the Intel GPU this has followed many suspend cycles
+            (see host_suspends_total); a reboot clears it.

@@ -129,6 +129,22 @@ def test_route_footer_explains_a_fallback():
     assert "answered by phi on the NPU" in footer and "the Intel GPU was unavailable" in footer
 
 
+def test_a_backend_that_cannot_generate_goes_to_the_back_of_the_line():
+    capabilities = caps(("ovms-gpu", True, ["qwen"]), ("ovms-npu", True, ["phi"]))
+    capabilities.backends[0].generating = False
+    assert [c[0] for c in router.candidate_backends(capabilities)] == ["ovms-npu", "ovms-gpu"]
+
+
+def test_footer_says_why_a_degraded_gpu_was_stepped_around(monkeypatch):
+    monkeypatch.setenv("AIDEN_PROFILES", "cpu,npu,intel-gpu")
+    monkeypatch.setattr(router.senses, "status", {"ovms-gpu": {"generating": False}})
+    candidates = [("ovms-npu", "http://ovms-npu", "phi"), ("ovms-gpu", "http://ovms-gpu", "qwen")]
+    passed = router.passed_over("ovms-npu", candidates, skipped=[])
+    assert passed == ["ovms-gpu"]
+    footer = router.route_footer("ovms-npu", "phi", passed)
+    assert "couldn't generate at my last check" in footer and "reboot" in footer and "unavailable" not in footer
+
+
 def test_route_footer_can_be_turned_off(monkeypatch):
     monkeypatch.setattr(router, "SHOW_ROUTE", False)
     assert router.route_footer("ovms-gpu", "qwen", []) == ""

@@ -20,6 +20,7 @@ from urllib.parse import urlparse
 
 import requests
 
+import senses
 import vault
 
 CLASSIFIER = {"url": "http://ovms-npu:8001/v3", "model": os.environ.get("OVMS_NPU_MODEL_NAME", "")}
@@ -196,16 +197,17 @@ def check_outbound(url: str, payload: Dict[str, Any], notes: List[Dict[str, Any]
 
 def candidate_backends(capabilities) -> List[Tuple[str, str, str]]:
     """(name, base url, model) of the available answering backends, in preference order.
-    "Available" only means the server answers health checks; a wedged backend is caught
-    by the request timeout and the router moves on to the next one."""
+    "Available" only means the server answers health checks. A backend that couldn't
+    generate at AIden's last probe (see senses.py) goes to the back of the line rather
+    than first; one that wedges mid-request is caught by the request timeout."""
     by_name = {b.name: b for b in capabilities.backends}
-    candidates = []
+    candidates, degraded = [], []
     for name in ANSWER_BACKENDS:
         backend = by_name.get(name)
         if backend and backend.available and backend.models:
             base = backend.url + OLLAMA_OPENAI_PATH if name == "ollama" else backend.url
-            candidates.append((name, base, backend.models[0]))
-    return candidates
+            (degraded if getattr(backend, "generating", None) is False else candidates).append((name, base, backend.models[0]))
+    return candidates + degraded
 
 
 def build_messages(messages: List[Dict[str, Any]], notes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -239,8 +241,16 @@ def route_footer(name: str, model: str, passed_over: List[str]) -> str:
         return ""
     device = DEVICE_NAMES.get(name) or ("the NVIDIA GPU" if "nvidia" in os.environ.get("AIDEN_PROFILES", "") else "the CPU")
     line = f"answered by {model} on {device}"
-    if passed_over:
-        line += f" ({' and '.join(DEVICE_NAMES.get(s, s) for s in passed_over)} {'was' if len(passed_over) == 1 else 'were'} unavailable)"
+    degraded = [s for s in passed_over if senses.status.get(s, {}).get("generating") is False]
+    down = [s for s in passed_over if s not in degraded]
+    reasons = []
+    if down:
+        reasons.append(f"{' and '.join(DEVICE_NAMES.get(s, s) for s in down)} {'was' if len(down) == 1 else 'were'} unavailable")
+    for s in degraded:
+        reasons.append(f"{DEVICE_NAMES.get(s, s)} is up but couldn't generate at my last check"
+                       + ("; a reboot usually clears it" if s == "ovms-gpu" else ""))
+    if reasons:
+        line += f" ({'; '.join(reasons)})"
     return f"\n\n*{line}*"
 
 
@@ -251,7 +261,9 @@ def passed_over(answered_by: str, candidates: List[Tuple[str, str, str]], skippe
     profiles = os.environ.get("AIDEN_PROFILES", "").split(",")
     names = [c[0] for c in candidates]
     higher = ANSWER_BACKENDS[:ANSWER_BACKENDS.index(answered_by)]
-    return [b for b in higher if (b in skipped or b not in names) and expected.get(b, "") in profiles]
+    stepped_around = lambda b: senses.status.get(b, {}).get("generating") is False
+    return [b for b in higher if (b in skipped or b not in names or stepped_around(b))
+            and expected.get(b, "") in profiles]
 
 
 def sse_chunk(content: str, finish: Optional[str] = None) -> str:
