@@ -15,6 +15,7 @@ import experience
 import mentor
 import router
 import selfcheck
+import toolbox
 from capabilities import get_capabilities
 from telemetry import logger, meter, tracer
 
@@ -220,7 +221,7 @@ def chat_completions(body: Dict[str, Any]):
 
     out_messages = router.build_messages(messages, notes)
     stream = bool(body.get("stream"))
-    response, skipped = None, []
+    response, skipped, tool_calls = None, [], []
     candidates = router.candidate_backends(get_capabilities())
     trace.get_current_span().set_attribute("router.candidates", [c[0] for c in candidates])
     for name, base, model in candidates:
@@ -230,7 +231,11 @@ def chat_completions(body: Dict[str, Any]):
         try:
             # Current span, so the outgoing HTTP call shows up as its child
             with trace.use_span(span, end_on_exit=False):
-                response = router.backend_request(base, model, out_messages, stream, body, notes)
+                # The model may call AIden's read-only tools first (see toolbox.py)
+                response, tool_calls = toolbox.converse(
+                    lambda msgs: router.backend_request(base, model, msgs, stream, body, notes),
+                    out_messages, stream, toolbox.offered(name))
+            span.set_attribute("router.tool_calls", [c["name"] for c in tool_calls])
             break
         except requests.RequestException as exc:
             # Fall back to the next tier (e.g. GPU wedged -> NPU -> CPU)
@@ -259,7 +264,7 @@ def chat_completions(body: Dict[str, Any]):
             "notes": [{"path": n["path"], "heading": n["heading"], "score": n["score"]} for n in notes],
             "answer": {"source": "local", "backend": name, "model": model, "skipped": skipped, "stream": stream,
                        "used_notes": bool(notes), "confidence": confidence, "unsure": unsure,
-                       "mentor_offered": unsure and offer_mentor,
+                       "mentor_offered": unsure and offer_mentor, "tool_calls": tool_calls,
                        "tokens": tokens, "seconds": round(seconds, 2),
                        "tokens_per_second": round(tokens / seconds, 1) if tokens and seconds > 0 else None,
                        "text": text},
@@ -277,7 +282,8 @@ def chat_completions(body: Dict[str, Any]):
         span.end()
 
     if stream:
-        route = router.route_footer(name, model, router.passed_over(name, candidates, skipped))
+        route = router.route_footer(name, model, router.passed_over(name, candidates, skipped),
+                                    [c["name"] for c in tool_calls])
         return StreamingResponse(router.stream_answer(response, notes, finished, route, offer_mentor), media_type="text/event-stream")
 
     result = response.json()
@@ -289,7 +295,8 @@ def chat_completions(body: Dict[str, Any]):
         unsure = confidence == "low"
         offer = f"\n\n*{router.MENTOR_OFFER}*" if unsure and offer_mentor else ""
         result["choices"][0]["message"]["content"] = (answer + router.sources_footer(notes, answer) + offer
-                                                     + router.route_footer(name, model, router.passed_over(name, candidates, skipped)))
+                                                     + router.route_footer(name, model, router.passed_over(name, candidates, skipped),
+                                                                           [c["name"] for c in tool_calls]))
     finished(usage.get("completion_tokens", 0), time.time() - start, unsure, answer if result.get("choices") else "", confidence)
     result["aiden"] = {"backend": name, "model": model, "skipped": skipped, "unsure": unsure, "needs_notes": wants_notes, "decided_by": decided_by,
                        "notes": [{"path": n["path"], "heading": n["heading"], "score": n["score"]} for n in notes]}

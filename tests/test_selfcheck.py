@@ -31,8 +31,9 @@ def test_outages_are_found_and_classified():
         (T0 + timedelta(hours=5), "ovms-gpu could not generate (1 in a row): ConnectionError: RemoteDisconnected"),
     ]
     found = selfcheck.outages(events)
-    assert [(o["kind"], o["recovered"] is not None) for o in found["ovms-gpu"]] == [
-        ("crash", True), ("hang", False), ("crash", False)]
+    assert [(o["kind"], o["recovered"] is not None, o.get("ended_unseen", False)) for o in found["ovms-gpu"]] == [
+        ("crash", True, False), ("hang", False, True), ("crash", False, False)]
+    assert selfcheck.describe_outage(found["ovms-gpu"][1], generating_now=False).endswith("(ended later)")
     assert found["ovms-npu"][0]["kind"] == "stuck loading"
 
 
@@ -97,3 +98,16 @@ def test_gather_runs_every_check_and_collects_failures(monkeypatch):
     facts = selfcheck.gather()
     assert ("container", "ovms-gpu") in ran and ("container-errors", "ovms-npu") in ran
     assert facts["failed_checks"] == ["gpu-kernel-log: PermissionError"]
+
+
+def test_a_server_stuck_loading_is_named(monkeypatch):
+    monkeypatch.setattr(selfcheck.senses, "status", {"ovms-gpu": {"generating": False, "error": "server not ready"},
+                                                     "ovms-npu": {"generating": True}})
+    text = selfcheck.report(facts(outages={}))
+    assert "❌ up but stuck loading its model" in text and "a reboot clears it" in text
+
+
+def test_times_from_other_days_say_which_day():
+    now = datetime.now(timezone.utc)
+    assert ":" in selfcheck.local(now) and " " not in selfcheck.local(now)
+    assert selfcheck.local(now - timedelta(days=1)).startswith("yesterday ")

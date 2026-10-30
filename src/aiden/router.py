@@ -234,9 +234,9 @@ SHOW_ROUTE = os.environ.get("AIDEN_SHOW_ROUTE", "true").lower() != "false"
 DEVICE_NAMES = {"ovms-gpu": "the Intel GPU", "ovms-npu": "the NPU"}
 
 
-def route_footer(name: str, model: str, passed_over: List[str]) -> str:
-    """One line saying which model answered where, and which preferred tier wasn't
-    available, so AIden's choices are visible in chat."""
+def route_footer(name: str, model: str, passed_over: List[str], looked_at: Optional[List[str]] = None) -> str:
+    """One line saying which model answered where, which preferred tier wasn't
+    available and which tools AIden used, so AIden's choices are visible in chat."""
     if not SHOW_ROUTE:
         return ""
     device = DEVICE_NAMES.get(name) or ("the NVIDIA GPU" if "nvidia" in os.environ.get("AIDEN_PROFILES", "") else "the CPU")
@@ -251,6 +251,8 @@ def route_footer(name: str, model: str, passed_over: List[str]) -> str:
                        + ("; a reboot usually clears it" if s == "ovms-gpu" else ""))
     if reasons:
         line += f" ({'; '.join(reasons)})"
+    if looked_at:
+        line += f"; looked at: {', '.join(dict.fromkeys(looked_at))}"
     return f"\n\n*{line}*"
 
 

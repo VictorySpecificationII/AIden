@@ -38,7 +38,10 @@ def wanted(prompt: str) -> bool:
 
 
 def local(ts: datetime) -> str:
-    return ts.astimezone().strftime("%H:%M")
+    """HH:MM in local time, with the day when it isn't today."""
+    ts, today = ts.astimezone(), datetime.now().astimezone().date()
+    day = "" if ts.date() == today else ("yesterday " if (today - ts.date()).days == 1 else ts.strftime("%a "))
+    return f"{day}{ts.strftime('%H:%M')}"
 
 
 def probe_events(hours: int = WINDOW_H) -> List[Tuple[datetime, str]]:
@@ -63,7 +66,8 @@ def outages(events: List[Tuple[datetime, str]]) -> Dict[str, List[Dict[str, Any]
                 open_.pop(name)["recovered"] = at
             continue
         if re.search(r"\(1 (?:in a row|probe\(s\) in a row)\)", line) and name in open_:
-            open_.pop(name)  # a fresh run of failures (e.g. after AIden restarted): a new outage
+            # A fresh run of failures (e.g. after AIden restarted): the previous outage ended
+            open_.pop(name)["ended_unseen"] = True
         if name not in open_:
             kind = next((k for k, pattern in FAILURE_KINDS if re.search(pattern, line)), "failure")
             open_[name] = {"kind": kind, "began": at, "recovered": None}
@@ -75,6 +79,8 @@ def describe_outage(o: Dict[str, Any], generating_now: bool) -> str:
     text = f"{o['kind']} at {local(o['began'])}"
     if o["recovered"]:
         return text + f" (back by {local(o['recovered'])})"
+    if o.get("ended_unseen"):
+        return text + " (ended later)"
     # No recovery line, e.g. AIden themselves restarted meanwhile: trust the latest probe
     return text + (" (recovered since)" if generating_now else " (not recovered yet)")
 
@@ -128,13 +134,17 @@ def report(facts: Dict[str, Any]) -> str:
             stuck.append(label)
         elif sensed is None:
             state = "⏳ up, not probed yet"
+        elif sensed.get("error") == "server not ready":
+            state = "❌ up but stuck loading its model"
+            stuck.append(label)
         elif sensed["generating"]:
             state = "✅ generating"
         else:
             state = f"❌ up but can't generate ({sensed['error']})"
             stuck.append(label)
         busy = facts["busy"].get(hardware) if hardware else None
-        lines.append(f"- {label} ({model}): {state}" + (f" · {busy:.0f}% busy" if busy is not None else ""))
+        tools = {True: " · can use tools", False: " · no tools (can't follow the protocol)"}.get(getattr(backend, "tools", None), "")
+        lines.append(f"- {label} ({model}): {state}" + (f" · {busy:.0f}% busy" if busy is not None else "") + tools)
     if facts.get("memory") and facts.get("load"):
         m, l = facts["memory"], facts["load"]
         lines.append(f"- Memory: {m['available_gib']} of {m['total_gib']} GiB free · load {l['load_1m']} on {l['cpus']} CPUs")

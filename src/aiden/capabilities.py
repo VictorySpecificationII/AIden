@@ -33,6 +33,8 @@ class BackendStatus(BaseModel):
     # From AIden's last generation probe (see senses.py); None = not probed yet
     generating: Optional[bool] = None
     generating_checked_at: Optional[str] = None
+    # Whether the model passed AIden's tool-protocol test; None = not tested yet
+    tools: Optional[bool] = None
 
 class MentorStatus(BaseModel):
     name: str
@@ -95,6 +97,9 @@ def probe_backend(backend: Dict[str, str]) -> BackendStatus:
     sensed = senses.status.get(backend["name"])
     if sensed:
         status.generating, status.generating_checked_at = sensed["generating"], sensed["checked_at"]
+    tested = senses.tool_status.get(backend["name"])
+    if tested and tested["model"] in status.models:
+        status.tools = tested["tools"]
     return status
 
 def prometheus_value(query: str) -> Optional[float]:

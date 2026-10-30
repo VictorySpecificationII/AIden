@@ -9,6 +9,7 @@ Prometheus alert on it.
 """
 import logging
 import os
+import re
 import threading
 import time
 from datetime import datetime, timezone
@@ -24,6 +25,13 @@ STARTUP_GRACE_S = 120
 
 logger = logging.getLogger("aiden.senses")
 status: Dict[str, Dict[str, Any]] = {}
+# Whether each backend's model can use AIden's tool protocol (see toolbox.py), tested once per model
+tool_status: Dict[str, Dict[str, Any]] = {}
+GARBLED_TOOL_LINE = re.compile(r"^[\s`*>]*[A-Z]{2,}:\s*[a-z_]+")
+TOOL_TESTS = [  # (question, should it ask for a tool?)
+    ("What time is it right now?", True),
+    ("What is 2 + 2?", False),
+]
 
 
 def probe(name: str, base_url: str, model: str) -> Dict[str, Any]:
@@ -50,6 +58,37 @@ def probe(name: str, base_url: str, model: str) -> Dict[str, Any]:
     return result
 
 
+def ask(base_url: str, model: str, messages) -> str:
+    response = requests.post(f"{base_url}/chat/completions", timeout=PROBE_TIMEOUT_S, json={
+        "model": model, "messages": messages, "max_tokens": 60, "temperature": 0,
+        "chat_template_kwargs": {"enable_thinking": False}})
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"] or ""
+
+
+def test_tools(name: str, base_url: str, model: str) -> Dict[str, Any]:
+    """Can this model follow AIden's tool protocol? It must ask for a tool when the question
+    needs one, and answer plainly when it doesn't (tools mustn't make ordinary answers worse)."""
+    from router import build_messages
+    import toolbox
+    results = []
+    try:
+        for question, needs_tool in TOOL_TESTS:
+            reply = ask(base_url, model, toolbox.with_instruction(build_messages([{"role": "user", "content": question}], [])))
+            calls = toolbox.parse(reply)
+            asked = bool(calls) and calls[0]["name"] in toolbox.TOOLS
+            plain = not GARBLED_TOOL_LINE.match(reply)  # no (garbled) tool line either, e.g. "TOOMANK: suspends {}"
+            results.append(asked if needs_tool else (plain and not calls))
+        passed = all(results)
+        detail = "follows the tool protocol" if passed else "doesn't follow the tool protocol reliably"
+    except Exception as exc:  # untested: no tools until a later probe succeeds
+        passed, detail = False, f"test failed: {type(exc).__name__}"
+    tool_status[name] = {"model": model, "tools": passed, "detail": detail,
+                         "checked_at": datetime.now(timezone.utc).isoformat()}
+    logger.info("%s (%s): %s", name, model, detail)
+    return tool_status[name]
+
+
 def not_ready(name: str):
     """An expected backend that isn't even up (e.g. stuck loading its model) can't generate."""
     previous = status.get(name, {})
@@ -67,8 +106,14 @@ def probe_all():
     profiles = active_profiles()
     for backend in capabilities.backends:
         if backend.name in ready:
-            probe(backend.name, *ready[backend.name])
-        elif backend.tier in profiles and not backend.available:  # expected here, but down
+            result = probe(backend.name, *ready[backend.name])
+            model = ready[backend.name][1]
+            tested = tool_status.get(backend.name, {})
+            if result["generating"] and (tested.get("model") != model or tested.get("detail", "").startswith("test failed")):
+                test_tools(backend.name, *ready[backend.name])
+        elif backend.tier in profiles and (not backend.available or backend.name != "ollama"):
+            # Expected here but down, or a model server up without its model (stuck loading).
+            # Ollama without models is just empty, not broken.
             not_ready(backend.name)
 
 
