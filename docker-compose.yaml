@@ -413,14 +413,10 @@ services:
     image: openvino/model_server:2026.4.1-gpu  # -gpu images include the NPU driver
     container_name: ovms-npu
     restart: unless-stopped
+    # Serves whatever model-steward's config lists (the active model, plus a trial); it
+    # re-reads the file within a second of a change, so models switch without a restart
     command: >
-      --source_model ${OVMS_NPU_MODEL:?}
-      --model_name ${OVMS_NPU_MODEL_NAME:?}
-      --model_repository_path /home/ovms/models
-      --cache_dir /home/ovms/models/.ov_cache
-      --target_device NPU
-      --task text_generation
-      --max_prompt_len 2000
+      --config_path /home/ovms/models/config_npu.json
       --rest_port 8001
       --metrics_enable
       --metrics_list ovms_requests_accepted,ovms_requests_rejected,ovms_responses,ovms_current_graphs,ovms_graph_error,ovms_graph_processing_time_us
@@ -428,6 +424,9 @@ services:
       - /dev/accel:/dev/accel
     group_add:
       - "${RENDER_GID:?}"
+    depends_on:
+      model-steward:
+        condition: service_healthy
     volumes:
       # Mounted on the ovms user's home so the new volume inherits its ownership
       - ovms-data:/home/ovms
@@ -449,6 +448,32 @@ services:
       prometheus.scrape: "true"
       prometheus.port: "8001"
       prometheus.job: "ovms-npu"
+
+  # AIden's hands for models: pulls OpenVINO builds from Hugging Face and edits the model
+  # servers' config files (active model, trial). Enforces the limits itself (source org,
+  # licences, disk and memory budgets) and never touches Docker. No published port.
+  model-steward:
+    profiles: [npu]
+    build:
+      context: ./tools/model-steward
+    image: intellectualplayspace/model-steward
+    container_name: model-steward
+    restart: unless-stopped
+    environment:
+      - STEWARD_TOKEN=${STEWARD_TOKEN:?}
+      - ADOPT_NPU_SOURCE=${OVMS_NPU_MODEL:?}
+      - ADOPT_NPU_NAME=${OVMS_NPU_MODEL_NAME:?}
+      - DISK_CAP_GB=${AIDEN_MODEL_DISK_CAP_GB:-20}
+      - MIN_FREE_GB=${AIDEN_MODEL_MIN_FREE_GB:-4}
+    volumes:
+      - ovms-data:/home/ovms
+    networks:
+      - dev
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8770/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   # AIden's mentor: Claude via the Claude Code CLI, asked only for questions without the
   # user's notes. Auth is a long-lived subscription token (claude setup-token) from .env;
