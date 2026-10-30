@@ -22,6 +22,7 @@ import requests
 from fastapi import APIRouter
 from opentelemetry import metrics
 
+import evals
 import experience
 
 STEWARD_URL = os.environ.get("STEWARD_URL", "http://model-steward:8770")
@@ -103,6 +104,8 @@ def catalog(device: str) -> List[Dict[str, Any]]:
     listed = requests.get(f"{HF}/api/models", timeout=30, params={
         "author": limits["org"], "search": suffix, "sort": "downloads", "limit": CATALOG_SIZE}).json()
     have = {m["source"] for m in current["models"].values()} | tried()
+    active_size = model_size(current, device)
+    room = free_memory_gb() - limits.get("min_free_gb", 4)
     found = []
     for item in listed:
         source = item["id"]
@@ -113,9 +116,31 @@ def catalog(device: str) -> List[Dict[str, Any]]:
         if licence not in limits["licences"] or info.get("pipeline_tag") not in (None, "text-generation"):
             continue
         size_gb = sum(f.get("size") or 0 for f in info.get("siblings", [])) / 1e9
+        # Much smaller than the current model is unlikely to be better; too big won't load
+        if (active_size and size_gb < 0.5 * active_size) or size_gb * 1.2 > room:
+            continue
         found.append({"source": source, "size_gb": round(size_gb, 1), "licence": licence,
                       "downloads": item.get("downloads", 0)})
     return found
+
+
+def model_size(current: Dict[str, Any], device: str) -> Optional[float]:
+    """Size of the device's active model, from the steward or else Hugging Face."""
+    active = current["models"].get(current["devices"].get(device, {}).get("active") or "", {})
+    if active.get("size_gb"):
+        return active["size_gb"]
+    try:
+        info = requests.get(f"{HF}/api/models/{active['source']}", params={"blobs": "true"}, timeout=30).json()
+        return sum(f.get("size") or 0 for f in info.get("siblings", [])) / 1e9
+    except (requests.RequestException, KeyError, ValueError):
+        return None
+
+
+def free_memory_gb() -> float:
+    import re
+    with open("/proc/meminfo") as f:
+        fields = dict(re.findall(r"^(\w+):\s+(\d+) kB", f.read(), re.M))
+    return int(fields["MemAvailable"]) / 1024 / 1024
 
 
 def wait_until_answering(device: str, name: str, timeout_s: float = LOAD_TIMEOUT_S) -> bool:
@@ -264,6 +289,15 @@ def ask_answer(device: str, model: str, question: str) -> str:
     return response.json()["choices"][0]["message"]["content"] or ""
 
 
+def plain_reply(device: str, model: str, prompt: str, max_tokens: int) -> str:
+    """A reply without AIden's system prompt: raw ability, as the public test sets expect."""
+    from router import backend_request
+    _, server = SERVERS[device]
+    response = backend_request(f"{server}/v3", model, [{"role": "user", "content": prompt}], False,
+                               {"max_tokens": max_tokens, "temperature": 0}, [])
+    return response.json()["choices"][0]["message"]["content"] or ""
+
+
 def answer_quality(device: str, model: str) -> Dict[str, Any]:
     """Share of checkable answers right, and how well the model follows AIden's confidence
     protocol (a confidence line on every answer, low when it can't know)."""
@@ -306,10 +340,14 @@ def evaluate(device: str, model: str, questions: Optional[List[Dict[str, Any]]] 
     result = {"model": model, "tools": tools, "tools_detail": tools_detail, "tokens_per_s": speed(device, model)}
     if device == "gpu":
         answers = answer_quality(device, model)
+        checked = evals.checked_outcomes(lambda prompt, max_tokens: plain_reply(device, model, prompt, max_tokens),
+                                         questions or {}) if isinstance(questions, dict) else {}
+        outcomes = answers["outcomes"] + [o for name in sorted(checked) for o in checked[name]]
         # Right answers count most; following AIden's confidence protocol is part of the job
-        quality = round(0.7 * answers["answers"] + 0.15 * answers["confidence_lines"]
+        quality = round(0.7 * accuracy(outcomes) + 0.15 * answers["confidence_lines"]
                         + 0.15 * answers["honest_when_unsure"], 3)
-        result.update(quality=quality, answer_scores=answers, outcomes=answers["outcomes"])
+        result.update(quality=quality, answer_scores=answers, outcomes=outcomes,
+                      checked={"benchmark": answers["answers"], **{n: accuracy(o) for n, o in checked.items()}})
     else:
         questions = questions if questions is not None else routing_questions()
         outcomes = routing_outcomes(model, questions)
@@ -343,6 +381,17 @@ def measurement_problems(device: str, questions: List[Dict[str, Any]]) -> List[s
             problems.append(f"an empty answer passes {empty} answer checks")
         if len(ANSWER_BENCHMARK) < MIN_QUESTIONS:
             problems.append(f"only {len(ANSWER_BENCHMARK)} answer questions")
+        if isinstance(questions, dict):
+            for name, rows in questions.items():
+                if len(rows) < MIN_QUESTIONS:
+                    problems.append(f"only {len(rows)} {name} questions")
+            # Canaries: the true answers must pass the checks, and "I don't know" must fail them
+            truth = {"gsm8k": lambda r: f"Answer: {evals.gsm8k_truth(r):g}", "mmlu_pro": lambda r: r["answer"]}
+            for name, rows in questions.items():
+                if evals.checked_outcomes(lambda p, t, r=iter(rows): truth[name](next(r)), {name: rows})[name].count(False):
+                    problems.append(f"the true {name} answers don't all pass the checks")
+                if any(evals.checked_outcomes(lambda p, t: "I don't know.", {name: rows})[name]):
+                    problems.append(f"'I don't know' passes {name} checks")
     else:
         if len(questions) < MIN_QUESTIONS:
             problems.append(f"only {len(questions)} routing questions (need {MIN_QUESTIONS})")
@@ -464,7 +513,8 @@ def scout(device: str) -> Dict[str, Any]:
                 name = None
         if not name:
             return {"outcome": "no candidate could be tried"}
-        questions = routing_questions()
+        seed = int(time.time())
+        questions = evals.sample(seed) if device == "gpu" else routing_questions()
         problems = measurement_problems(device, questions)
         if problems:
             steward("POST", "/end-trial", {"device": device})
@@ -475,8 +525,11 @@ def scout(device: str) -> Dict[str, Any]:
         baseline = evaluate(device, slots["active"], questions)
         switch, reason = better(result, baseline)
         opinion = claude_opinion(device, result, baseline)
+        replays = judge_replays(device, name, slots["active"], seed) if device == "gpu" else None
+        if switch and replays and replays["veto"]:
+            switch, reason = False, replays["veto"]
         journal("judged", device=device, source=source, name=name, candidate=result, active=baseline,
-                switch=switch, reason=reason, claude=opinion)
+                switch=switch, reason=reason, claude=opinion, replays=replays)
         if switch:
             steward("POST", "/activate", {"device": device, "name": name})
             switch_counter.add(1, {"device": device, "action": "switch"})
@@ -561,3 +614,38 @@ def scout_endpoint(device: str = "npu"):
         return {"error": f"unknown device {device}"}
     threading.Thread(target=scout, args=(device,), daemon=True, name=f"scout-{device}").start()
     return {"started": device}
+
+
+# --- The user's own conversations as a veto --------------------------------------------
+
+MIN_DECISIVE_VERDICTS = 5
+
+
+def judge_replays(device: str, candidate: str, active: str, seed: int) -> Optional[Dict[str, Any]]:
+    """Replay recent conversations on both models and let two judges compare the answers.
+    Claude can veto a switch when it clearly prefers the active model and the local judge
+    agrees; the local judge alone can't (it is the active model, so it is biased)."""
+    from router import split_confidence
+    prompts = evals.replay_prompts()
+    if not prompts:
+        return None
+    pairs = []
+    for turn in prompts:
+        try:
+            pairs.append({"prompt": turn["prompt"], "disliked": turn["disliked"],
+                          "candidate": split_confidence(ask_answer(device, candidate, turn["prompt"]))[0],
+                          "active": split_confidence(ask_answer(device, active, turn["prompt"]))[0]})
+        except Exception as exc:
+            logger.info("Replay failed: %s", exc)
+    local = evals.local_verdicts(lambda q: plain_reply(device, active, q, 8), pairs, seed)
+    shareable = [p for p in pairs if evals.shareable(p)[0]]
+    claude = evals.claude_verdicts(shareable, seed)
+    result = {"replayed": len(pairs), "disliked": sum(p["disliked"] for p in pairs),
+              "shared_with_claude": len(shareable), "local": evals.tally(local), "claude": evals.tally(claude), "veto": None}
+    c = result["claude"]
+    if c and c["active"] + c["candidate"] >= MIN_DECISIVE_VERDICTS:
+        p = p_better([v == "active" for v in claude], [v == "candidate" for v in claude])
+        if p <= SIGNIFICANCE and result["local"]["active"] > result["local"]["candidate"]:
+            result["veto"] = (f"on your conversations both judges prefer the current model "
+                              f"(Claude {c['active']}-{c['candidate']}, local {result['local']['active']}-{result['local']['candidate']})")
+    return result
