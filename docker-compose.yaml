@@ -267,9 +267,18 @@ services:
       # Your ratings in OpenWebUI become experience too (see feedback.py); optional
       - OPENWEBUI_URL=http://ollama-webui:8080
       - OPENWEBUI_API_KEY=${OPENWEBUI_API_KEY:-}
+      # AIden's read-only terminal (terminal.py): Docker only through the GET-only proxy
+      - DOCKER_PROXY_URL=http://docker-ro-proxy:2375
+    # Reading the host journal needs its group; everything below is mounted read-only
+    group_add:
+      - "${JOURNAL_GID:?}"
     volumes:
       # The user's Obsidian vault, read-only: AIden indexes it for search (see vault.py)
       - ${VAULT_PATH:?}:/vault:ro
+      # Read-only views of the host for the gear check (see terminal.py, selfcheck.py)
+      - /sys:/host/sys:ro
+      - /var/log/journal:/host/journal:ro
+      - /etc/localtime:/etc/localtime:ro
       # AIden's experience (prompts, decisions, answers): training data, local only
       - aiden-experience:/data/experience
     ports:
@@ -282,6 +291,26 @@ services:
       homepage.name: "Aiden"
       homepage.icon: "docker"
       homepage.href: "http://localhost:8000"
+
+  # Read-only window onto Docker for AIden's gear check: holds the socket, answers only
+  # container status, inspect (secrets removed) and model-server logs. No published port.
+  docker-ro-proxy:
+    image: python:3.12.7-slim
+    container_name: docker-ro-proxy
+    restart: unless-stopped
+    command: ["python", "/app/docker_ro_proxy.py"]
+    user: "65534:${DOCKER_GID:?}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - LOG_CONTAINERS=ovms-gpu,ovms-npu,ovms-cpu-embed,AIden,qdrant,ollama,ollama-webui
+    volumes:
+      - ./tools/sre/docker-ro-proxy/docker_ro_proxy.py:/app/docker_ro_proxy.py:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - dev
 
   qdrant:
     image: qdrant/qdrant:latest

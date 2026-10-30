@@ -14,6 +14,7 @@ from opentelemetry import trace
 import experience
 import mentor
 import router
+import selfcheck
 from capabilities import get_capabilities
 from telemetry import logger, meter, tracer
 
@@ -167,6 +168,15 @@ def background_task_turn(body: Dict[str, Any], messages: List[Dict[str, Any]], t
 def list_models():
     return {"object": "list", "data": [{"id": "aiden", "object": "model", "owned_by": "aiden"}]}
 
+def selfcheck_turn(prompt: str, stream: bool):
+    """'How are you doing?': AIden answers from their own senses, not from a model."""
+    with tracer.start_as_current_span("router.selfcheck") as span:
+        text, facts = selfcheck.check()
+        span.set_attribute("selfcheck.failed_checks", len(facts["failed_checks"]))
+        remember("selfcheck", {"trace_id": current_trace_id(), "prompt": prompt, "answer": text,
+                               "failed_checks": facts["failed_checks"]})
+        return text_reply(text, stream, {"backend": "selfcheck"})
+
 @api.post("/v1/chat/completions")
 def chat_completions(body: Dict[str, Any]):
     messages = body.get("messages", [])
@@ -179,6 +189,8 @@ def chat_completions(body: Dict[str, Any]):
     task = router.background_task(prompt)
     if task:
         return background_task_turn(body, messages, task)
+    if selfcheck.wanted(prompt):
+        return selfcheck_turn(prompt, bool(body.get("stream")))
     if mentor.wants_mentor(prompt):
         return mentor_turn(messages, prompt, bool(body.get("stream")))
 

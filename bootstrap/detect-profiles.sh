@@ -60,6 +60,7 @@ for dev in /dev/dri/renderD* /dev/accel/accel*; do
     [ -e "$dev" ] && { render_gid=$(stat -c %g "$dev"); break; }
 done
 docker_gid=$(getent group docker | cut -d: -f3 || true)
+journal_gid=$(getent group systemd-journal | cut -d: -f3 || true)
 
 # Keep profiles that aren't about hardware (e.g. mentor, elk) that you've already enabled
 if [ -f "$ENV_FILE" ]; then
@@ -83,6 +84,7 @@ echo "OpenWebUI URLs:   ${URLS:-(none)}"
 echo "Task model:       ${task_model:-(AIden handles background tasks)}"
 echo "RENDER_GID:       ${render_gid:-(no render device)}"
 echo "DOCKER_GID:       ${docker_gid:-(no docker group)}"
+echo "JOURNAL_GID:      ${journal_gid:-(no systemd-journal group)}"
 
 # --- Apply -----------------------------------------------------------------
 if [ ! -f "$ENV_FILE" ]; then
@@ -133,5 +135,6 @@ set_var OPENWEBUI_OPENAI_API_KEYS "$KEYS"
 set_var OPENWEBUI_TASK_MODEL "$task_model"
 [ -n "$render_gid" ] && set_var RENDER_GID "$render_gid"
 [ -n "$docker_gid" ] && set_var DOCKER_GID "$docker_gid"
+[ -n "$journal_gid" ] && set_var JOURNAL_GID "$journal_gid"
 
 echo "Updated $ENV_FILE. Apply with: docker compose up -d --remove-orphans"

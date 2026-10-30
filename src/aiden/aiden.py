@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import capabilities
 import chat_api
 import feedback
+import selfcheck
 import senses
 import tools
 import vault
@@ -75,6 +76,7 @@ app.include_router(tools.api)
 app.include_router(vault_api.api)
 app.include_router(capabilities.api)
 app.include_router(chat_api.api)
+app.include_router(selfcheck.api)
 
 @app.get("/", include_in_schema=False)
 def root():

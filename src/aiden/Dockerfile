@@ -21,6 +21,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
 
+# journalctl, for AIden's read-only look at the host journal (see terminal.py)
+RUN apt-get update && apt-get install -y --no-install-recommends systemd \
+ && apt-get clean && rm -rf /var/lib/apt/lists/*
+
 # Copy source code
 COPY . .
 
