@@ -20,10 +20,16 @@ from urllib.parse import urlparse
 
 import requests
 
+import models
 import senses
 import vault
 
 CLASSIFIER = {"url": "http://ovms-npu:8001/v3", "model": os.environ.get("OVMS_NPU_MODEL_NAME", "")}
+
+
+def classifier_model() -> str:
+    """The NPU's active model (AIden may have switched it, see models.py), else the configured one."""
+    return models.active_model("ovms-npu") or CLASSIFIER["model"]
 # Preferred order for answering; the first available one with a model is used
 ANSWER_BACKENDS = ["ovms-gpu", "ovms-npu", "ollama"]
 OLLAMA_OPENAI_PATH = "/v1"
@@ -113,7 +119,8 @@ def rules_decide(prompt: str) -> Tuple[Optional[bool], str]:
     return None, "no rule matched"
 
 
-def classify_with_npu(prompt: str) -> Tuple[Optional[bool], str]:
+def classify_with_npu(prompt: str, model: Optional[str] = None) -> Tuple[Optional[bool], str]:
+    """Ask the NPU model (or `model`, e.g. a candidate on trial) whether the prompt needs notes."""
     question = (
         "Does answering the following message require the user's own personal notes "
         "(their projects, decisions, clients, plans or past work)? Reply with only yes or no.\n\n"
@@ -121,7 +128,9 @@ def classify_with_npu(prompt: str) -> Tuple[Optional[bool], str]:
     )
     try:
         response = requests.post(f"{CLASSIFIER['url']}/chat/completions", timeout=15, json={
-            "model": CLASSIFIER["model"], "max_tokens": 3, "temperature": 0,
+            "model": model or classifier_model(), "max_tokens": 3, "temperature": 0,
+            # A one-word verdict: models that "think" first (Qwen3) would spend the tokens on that
+            "chat_template_kwargs": {"enable_thinking": False},
             "messages": [{"role": "user", "content": question}]})
         response.raise_for_status()
         answer = response.json()["choices"][0]["message"]["content"].strip().lower()
@@ -206,7 +215,10 @@ def candidate_backends(capabilities) -> List[Tuple[str, str, str]]:
         backend = by_name.get(name)
         if backend and backend.available and backend.models:
             base = backend.url + OLLAMA_OPENAI_PATH if name == "ollama" else backend.url
-            (degraded if getattr(backend, "generating", None) is False else candidates).append((name, base, backend.models[0]))
+            # A server can hold a model on trial next to the active one: answer with the active one
+            active = models.active_model(name)
+            model = active if active in backend.models else backend.models[0]
+            (degraded if getattr(backend, "generating", None) is False else candidates).append((name, base, model))
     return candidates + degraded
 
 

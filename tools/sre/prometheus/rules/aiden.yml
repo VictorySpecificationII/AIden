@@ -14,3 +14,12 @@ groups:
             AIden's last probe of {{ $labels.backend }} got no answer, so requests fall back to
             the next model. On the Intel GPU this has followed many suspend cycles
             (see host_suspends_total); a reboot clears it.
+      - alert: AIdenSwitchedModel
+        expr: increase(aiden_model_switches_total[1h]) > 0
+        labels:
+          severity: info
+        annotations:
+          summary: "AIden {{ $labels.action }} on the {{ $labels.device }}"
+          description: >-
+            AIden changed the model on the {{ $labels.device }} on their own. GET /models or
+            ask AIden for a gear check to see which model and why.

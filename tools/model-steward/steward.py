@@ -202,7 +202,7 @@ def activate(device, name):
         slots = slots_for(state, device)
         if slots.get("trial") != name:
             raise Refused("only the model on trial can be activated (it is already loaded and tested)")
-        slots.update(previous=slots.get("active"), active=name, trial=None)
+        slots.update(previous=slots.get("active"), active=name, trial=None, switched_at=time.time())
         save(state)
     return slots
 
@@ -213,7 +213,7 @@ def rollback(device):
         slots = slots_for(state, device)
         if not slots.get("previous"):
             raise Refused("there is no previous model")
-        slots.update(active=slots["previous"], previous=slots["active"], trial=None)
+        slots.update(active=slots["previous"], previous=slots["active"], trial=None, switched_at=None)
         save(state)
     return slots
 

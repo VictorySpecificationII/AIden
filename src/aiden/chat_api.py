@@ -13,6 +13,7 @@ from opentelemetry import trace
 
 import experience
 import mentor
+import models
 import router
 import selfcheck
 import toolbox
@@ -137,12 +138,15 @@ task_counter = meter.create_counter(
 )
 
 def background_task_turn(body: Dict[str, Any], messages: List[Dict[str, Any]], task: str):
-    """A chat-UI background task (title, tags, follow-ups) that reached AIden: pass it to
-    the first available backend unchanged. No notes, no confidence line, no footers."""
+    """A chat-UI background task (title, tags, follow-ups): pass it unchanged to the NPU's
+    active model (light work, keeps the GPU free), else the next available backend.
+    No notes, no confidence line, no footers."""
     stream = bool(body.get("stream"))
     with tracer.start_as_current_span("router.background_task") as span:
         span.set_attribute("router.task", task)
-        for name, base, model in router.candidate_backends(get_capabilities()):
+        candidates = router.candidate_backends(get_capabilities())
+        candidates.sort(key=lambda c: c[0] != "ovms-npu")
+        for name, base, model in candidates:
             start = time.time()
             try:
                 response = router.backend_request(base, model, messages, stream, body, notes=[])
@@ -190,6 +194,7 @@ def chat_completions(body: Dict[str, Any]):
     task = router.background_task(prompt)
     if task:
         return background_task_turn(body, messages, task)
+    models.note_chat()  # AIden scouts for models only when nobody is chatting
     if selfcheck.wanted(prompt):
         return selfcheck_turn(prompt, bool(body.get("stream")))
     if mentor.wants_mentor(prompt):

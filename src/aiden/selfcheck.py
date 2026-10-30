@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from fastapi import APIRouter
 
+import models
 import senses
 import terminal
 from capabilities import HARDWARE_QUERIES, get_capabilities, prometheus_value
@@ -113,6 +114,10 @@ def gather() -> Dict[str, Any]:
     except (requests.RequestException, ValueError, KeyError) as exc:
         facts["outages"] = None
         facts["failed_checks"].append(f"probe history (Loki): {type(exc).__name__}")
+    try:
+        facts["model_changes"] = models.recent()
+    except (OSError, ValueError):
+        facts["model_changes"] = []
     for name in ("uptime", "memory", "load", "suspends", "sleep-log", "gpu-kernel-log"):
         facts[name] = look(name)
     facts["containers"] = {name: (look("container", name=name), look("container-errors", name=name))
@@ -191,6 +196,18 @@ def report(facts: Dict[str, Any]) -> str:
             lines.append("- Kernel: no GPU warnings this boot.")
     if facts["failed_checks"]:
         lines.append("- Couldn't check: " + "; ".join(facts["failed_checks"]) + ".")
+
+    changes = [r for r in facts.get("model_changes") or [] if r.get("action") in ("switched", "rolled_back", "rejected")]
+    if changes:
+        lines += ["", "**Recent model changes**"]
+        for r in changes[-5:]:
+            when = local(datetime.fromisoformat(r["at"]))
+            if r["action"] == "switched":
+                lines.append(f"- {when}: switched my {r['device'].upper()} to {r['name']} ({r['reason']}).")
+            elif r["action"] == "rolled_back":
+                lines.append(f"- {when}: rolled my {r['device'].upper()} back to {r['back_to']} ({r['reason']}).")
+            else:
+                lines.append(f"- {when}: tried {r['name']} on my {r['device'].upper()}, kept the current one ({r['reason']}).")
 
     lines += [""]
     if stuck:

@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import capabilities
 import chat_api
 import feedback
+import models
 import selfcheck
 import senses
 import tools
@@ -71,12 +72,14 @@ def start_background_work():
     vault.start(tracer)
     feedback.start()
     senses.start()
+    models.start()
 
 app.include_router(tools.api)
 app.include_router(vault_api.api)
 app.include_router(capabilities.api)
 app.include_router(chat_api.api)
 app.include_router(selfcheck.api)
+app.include_router(models.api)
 
 @app.get("/", include_in_schema=False)
 def root():

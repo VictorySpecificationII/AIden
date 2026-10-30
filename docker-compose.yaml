@@ -264,6 +264,9 @@ services:
       # Mentor: Claude via the mentor-bridge service (profile mentor); optional
       - MENTOR_URL=http://mentor-bridge:8765
       - MENTOR_TOKEN=${MENTOR_TOKEN:-}
+      # Choosing their own models: model-steward does the pulling and switching (models.py)
+      - STEWARD_URL=http://model-steward:8770
+      - STEWARD_TOKEN=${STEWARD_TOKEN:-}
       # Your ratings in OpenWebUI become experience too (see feedback.py); optional
       - OPENWEBUI_URL=http://ollama-webui:8080
       - OPENWEBUI_API_KEY=${OPENWEBUI_API_KEY:-}
@@ -387,8 +390,8 @@ services:
       # .env is the source of truth: without this, settings saved on first start
       # override env changes (e.g. adding a backend later)
       - ENABLE_PERSISTENT_CONFIG=False
-      # Model for background tasks (titles, tags, follow-ups) while chatting with AIden;
-      # empty = AIden itself, which passes them through cleanly (see chat_api.py)
+      # Model for background tasks (titles, tags, follow-ups); empty = AIden, who sends
+      # them to the NPU's active model (see chat_api.py)
       - TASK_MODEL_EXTERNAL=${OPENWEBUI_TASK_MODEL:-}
       # Extra OpenAI-compatible backends (e.g. OVMS on the NPU); may be empty
       - OPENAI_API_BASE_URLS=${OPENWEBUI_OPENAI_API_BASE_URLS?}

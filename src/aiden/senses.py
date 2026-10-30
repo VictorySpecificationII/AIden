@@ -13,7 +13,7 @@ import re
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 import requests
 from opentelemetry import metrics
@@ -66,7 +66,7 @@ def ask(base_url: str, model: str, messages) -> str:
     return response.json()["choices"][0]["message"]["content"] or ""
 
 
-def test_tools(name: str, base_url: str, model: str) -> Dict[str, Any]:
+def follows_tool_protocol(base_url: str, model: str) -> Tuple[bool, str]:
     """Can this model follow AIden's tool protocol? It must ask for a tool when the question
     needs one, and answer plainly when it doesn't (tools mustn't make ordinary answers worse)."""
     from router import build_messages
@@ -80,9 +80,13 @@ def test_tools(name: str, base_url: str, model: str) -> Dict[str, Any]:
             plain = not GARBLED_TOOL_LINE.match(reply)  # no (garbled) tool line either, e.g. "TOOMANK: suspends {}"
             results.append(asked if needs_tool else (plain and not calls))
         passed = all(results)
-        detail = "follows the tool protocol" if passed else "doesn't follow the tool protocol reliably"
+        return passed, "follows the tool protocol" if passed else "doesn't follow the tool protocol reliably"
     except Exception as exc:  # untested: no tools until a later probe succeeds
-        passed, detail = False, f"test failed: {type(exc).__name__}"
+        return False, f"test failed: {type(exc).__name__}"
+
+
+def test_tools(name: str, base_url: str, model: str) -> Dict[str, Any]:
+    passed, detail = follows_tool_protocol(base_url, model)
     tool_status[name] = {"model": model, "tools": passed, "detail": detail,
                          "checked_at": datetime.now(timezone.utc).isoformat()}
     logger.info("%s (%s): %s", name, model, detail)
@@ -107,6 +111,8 @@ def probe_all():
     for backend in capabilities.backends:
         if backend.name in ready:
             result = probe(backend.name, *ready[backend.name])
+            import models
+            models.watch(backend.name, result)  # roll back a freshly switched model that keeps failing
             model = ready[backend.name][1]
             tested = tool_status.get(backend.name, {})
             if result["generating"] and (tested.get("model") != model or tested.get("detail", "").startswith("test failed")):
