@@ -124,11 +124,19 @@ def records(store):
     return [json.loads(l) for f in store.glob("*.jsonl") for l in f.read_text().splitlines()]
 
 
-def test_scout_switches_to_a_better_model(steward, monkeypatch, store):
+def test_a_better_model_goes_into_shadow_first(steward, monkeypatch, store):
     monkeypatch.setattr(models, "evaluate", lambda device, model, q: score(tools=model == "gemma-cw-ov", model=model))
     result = models.scout("npu")
-    assert result["outcome"] == "switched" and ("/activate", {"device": "npu", "name": "gemma-cw-ov"}) in steward.calls
-    assert [r["action"] for r in records(store)] == ["judged", "switched"]
+    assert result["outcome"] == "shadowing" and not any(c[0] == "/activate" for c in steward.calls)
+    assert [r["action"] for r in records(store)] == ["judged", "shadow_started"]
+    assert models.scout("npu")["outcome"] == "busy"  # no new round while one is in shadow
+
+
+def test_without_shadow_a_better_model_switches_at_once(steward, monkeypatch, store):
+    monkeypatch.setattr(models.shadow, "SHADOW_DAYS", 0)
+    monkeypatch.setattr(models, "evaluate", lambda device, model, q: score(tools=model == "gemma-cw-ov", model=model))
+    assert models.scout("npu")["outcome"] == "switched"
+    assert ("/activate", {"device": "npu", "name": "gemma-cw-ov"}) in steward.calls
 
 
 def test_scout_rejects_and_deletes_a_worse_model(steward, monkeypatch, store):
@@ -194,3 +202,66 @@ def test_claude_only_gives_a_second_opinion(steward, monkeypatch, store):
     assert models.scout("npu")["outcome"] == "rejected"  # Claude preferring it doesn't switch
     judged = [r for r in records(store) if r["action"] == "judged"][0]
     assert judged["claude"]["candidate"] == 9
+
+
+def turn(at, decided_by="npu", classifier="q", backend="ovms-gpu", model="g", unsure=False, skipped=(), trace=None):
+    return {"kind": "turn", "at": at, "trace_id": trace,
+            "decision": {"decided_by": decided_by, "classifier_model": classifier},
+            "answer": {"backend": backend, "model": model, "unsure": unsure, "skipped": list(skipped)}}
+
+
+def write(store, records):
+    with open(store / "2026-10-30.jsonl", "a") as f:
+        for r in records:
+            f.write(json.dumps(r) + "\n")
+
+
+def iso(ts):
+    from datetime import datetime, timezone
+    return datetime.fromtimestamp(ts, timezone.utc).isoformat()
+
+
+def test_two_proportion_test():
+    assert models.p_worse((10, 20), (1, 20)) < 0.01      # 50% vs 5%: clearly worse
+    assert models.p_worse((2, 20), (1, 20)) > 0.2        # 10% vs 5%: could be chance
+    assert models.p_worse((0, 20), (0, 20)) == 1.0
+
+
+def test_a_switch_that_breaks_the_classifier_is_rolled_back(steward, store):
+    """Today's real failure: Qwen3 thought through its 3 tokens and every request fell back."""
+    now = time.time()
+    switched = now - 3600
+    steward.state["devices"]["npu"].update(active="qwen", previous="phi", switched_at=switched)
+    before = [turn(iso(switched - 3000 + i), classifier=None) for i in range(25)]
+    after = [turn(iso(switched + 60 + i), decided_by="fallback", classifier="qwen") for i in range(25)]
+    write(store, before + after)
+    result = models.quality_watch("npu")
+    assert result["rolled_back"] and ("/rollback", {"device": "npu"}) in steward.calls
+    assert "classifier failures 25/25 vs 0/25" in records(store)[-1]["reason"]
+
+
+def test_no_rollback_without_enough_evidence(steward, store):
+    now = time.time()
+    switched = now - 3600
+    steward.state["devices"]["npu"].update(active="qwen", previous="phi", switched_at=switched)
+    write(store, [turn(iso(switched + 60 + i), decided_by="fallback", classifier="qwen") for i in range(5)])
+    result = models.quality_watch("npu")
+    assert result["findings"] == {} and not result["rolled_back"]
+
+
+def test_thumbs_down_after_a_gpu_switch_counts(steward, store):
+    now = time.time()
+    switched = now - 3600
+    steward.state["devices"]["gpu"] = {"active": "new", "previous": "old", "trial": None, "switched_at": switched}
+    before = [turn(iso(switched - 3000 + i), model="old", trace=f"b{i}") for i in range(25)]
+    after = [turn(iso(switched + 60 + i), model="new", trace=f"a{i}") for i in range(25)]
+    ratings = [{"kind": "feedback", "trace_id": f"b{i}", "rating": "up"} for i in range(25)]
+    ratings += [{"kind": "feedback", "trace_id": f"a{i}", "rating": "down" if i < 15 else "up"} for i in range(25)]
+    write(store, before + after + ratings)
+    result = models.quality_watch("gpu")
+    assert result["rolled_back"] and tuple(result["findings"]["thumbs down"]["after"]) == (15, 25)
+
+
+def test_old_switches_are_left_alone(steward):
+    steward.state["devices"]["npu"].update(active="qwen", previous="phi", switched_at=time.time() - 8 * 86400)
+    assert models.quality_watch("npu") is None

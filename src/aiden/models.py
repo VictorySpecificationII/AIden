@@ -24,6 +24,7 @@ from opentelemetry import metrics
 
 import evals
 import experience
+import shadow
 
 STEWARD_URL = os.environ.get("STEWARD_URL", "http://model-steward:8770")
 STEWARD_TOKEN = os.environ.get("STEWARD_TOKEN", "")
@@ -496,6 +497,8 @@ def scout(device: str) -> Dict[str, Any]:
         if not current or device not in current["devices"]:
             return {"outcome": "skipped", "reason": f"no steward-managed models on the {device}"}
         slots = current["devices"][device]
+        if shadow.active(device):
+            return {"outcome": "busy", "reason": "a candidate is proving itself in shadow"}
         if slots.get("trial"):  # left over from an interrupted round
             steward("POST", "/end-trial", {"device": device})
         candidates = catalog(device)
@@ -530,7 +533,11 @@ def scout(device: str) -> Dict[str, Any]:
             switch, reason = False, replays["veto"]
         journal("judged", device=device, source=source, name=name, candidate=result, active=baseline,
                 switch=switch, reason=reason, claude=opinion, replays=replays)
-        if switch:
+        if switch and shadow.SHADOW_DAYS > 0:
+            # Prove it on real traffic first: it stays loaded and answers silently (shadow.py)
+            journal("shadow_started", device=device, source=source, name=name, reason=reason)
+            outcome = "shadowing"
+        elif switch:
             steward("POST", "/activate", {"device": device, "name": name})
             switch_counter.add(1, {"device": device, "action": "switch"})
             journal("switched", device=device, source=source, name=name, previous=slots["active"], reason=reason)
@@ -584,11 +591,19 @@ def recent(days: int = 7) -> List[Dict[str, Any]]:
 
 
 def run_forever():
-    """Scout each device once per SCOUT_INTERVAL_S, at a moment the machine is idle."""
-    time.sleep(FIRST_SCOUT_AFTER_S)
-    last: Dict[str, float] = {}
+    """Every 10 minutes: watch quality after recent switches; once per SCOUT_INTERVAL_S,
+    at a moment the machine is idle, scout each device."""
+    time.sleep(600)
+    last: Dict[str, float] = {device: time.time() - SCOUT_INTERVAL_S + FIRST_SCOUT_AFTER_S for device in SERVERS}
     while True:
         for device in SERVERS:
+            try:
+                quality_watch(device)  # cheap: reads the experience records
+                ended = shadow.check(device)
+                if ended:
+                    logger.info("Shadow on the %s ended: %s", device, ended["outcome"])
+            except (StewardError, requests.RequestException, OSError, ValueError, KeyError) as exc:
+                logger.warning("Quality watch or shadow check on the %s failed: %s", device, exc)
             if time.time() - last.get(device, 0) >= SCOUT_INTERVAL_S and idle():
                 last[device] = time.time()
                 logger.info("Scouted the %s: %s", device, scout(device).get("outcome"))
@@ -603,9 +618,10 @@ def start():
 api = APIRouter()
 
 
-@api.get("/models", summary="AIden's models: what is active, previous or on trial, and recent decisions")
+@api.get("/models", summary="AIden's models: what is active, previous, on trial or in shadow, and recent decisions")
 def models_endpoint():
-    return {"steward": state(max_age_s=0), "recent": recent()}
+    shadows = {d: {**s, "pairs": len(shadow.pairs(d))} for d in SERVERS if (s := shadow.active(d))}
+    return {"steward": state(max_age_s=0), "shadow": shadows, "recent": recent()}
 
 
 @api.post("/models/scout", summary="Look for a better model for a device now (runs in the background)")
@@ -649,3 +665,88 @@ def judge_replays(device: str, candidate: str, active: str, seed: int) -> Option
             result["veto"] = (f"on your conversations both judges prefer the current model "
                               f"(Claude {c['active']}-{c['candidate']}, local {result['local']['active']}-{result['local']['candidate']})")
     return result
+
+
+# --- After a switch: watching quality, not just liveness (layer 3a) ---------------------
+
+QUALITY_WINDOW_S = 7 * 86400
+MIN_QUALITY_SAMPLES = 20
+QUALITY_SIGNIFICANCE = 0.05
+
+
+def turns_between(start: float, end: float) -> List[Dict[str, Any]]:
+    """Turn records in a time window, with any rating joined in from feedback records."""
+    turns, ratings = [], {}
+    for path in sorted(os.listdir(experience.EXPERIENCE_DIR)) if os.path.isdir(experience.EXPERIENCE_DIR) else []:
+        if not path.endswith(".jsonl"):
+            continue
+        with open(os.path.join(experience.EXPERIENCE_DIR, path), encoding="utf-8") as f:
+            for line in f:
+                if '"kind": "turn"' not in line and '"kind": "feedback"' not in line:
+                    continue
+                record = json.loads(line)
+                if record["kind"] == "feedback" and record.get("trace_id"):
+                    ratings[record["trace_id"]] = record.get("rating")
+                elif record["kind"] == "turn" and start <= datetime.fromisoformat(record["at"]).timestamp() < end:
+                    turns.append(record)
+    for turn in turns:
+        turn["rating"] = ratings.get(turn.get("trace_id"))
+    return turns
+
+
+def quality_signals(device: str, turns: List[Dict[str, Any]], model: Optional[str] = None) -> Dict[str, Tuple[int, int]]:
+    """Bad outcomes per signal as (bad, total), for a device's work; only one model's when
+    `model` is given (before a switch, everything was the previous model's anyway, and
+    older records don't name the classifier)."""
+    mine = lambda name: model is None or name == model
+    if device == "npu":
+        classified = [t for t in turns if (t.get("decision") or {}).get("decided_by") in ("npu", "fallback")
+                      and mine(t["decision"].get("classifier_model"))]
+        return {"classifier failures": (sum(t["decision"]["decided_by"] == "fallback" for t in classified), len(classified))}
+    backend = SERVERS[device][0]
+    answered = [t for t in turns if (t.get("answer") or {}).get("backend") == backend and mine(t["answer"].get("model"))]
+    tried = [t for t in turns if (t.get("answer") or {}).get("backend") == backend or backend in ((t.get("answer") or {}).get("skipped") or [])]
+    rated = [t for t in answered if t.get("rating") in ("up", "down")]
+    return {"thumbs down": (sum(t["rating"] == "down" for t in rated), len(rated)),
+            "unsure answers": (sum(bool(t["answer"].get("unsure")) for t in answered), len(answered)),
+            "times skipped": (sum(backend in (t["answer"].get("skipped") or []) for t in tried), len(tried))}
+
+
+def p_worse(after: Tuple[int, int], before: Tuple[int, int]) -> float:
+    """One-sided two-proportion z-test: the chance of a rate this much higher after the
+    switch if nothing had really changed."""
+    from math import erf, sqrt
+    (bad_a, n_a), (bad_b, n_b) = after, before
+    pooled = (bad_a + bad_b) / (n_a + n_b)
+    if pooled in (0, 1):
+        return 1.0
+    z = (bad_a / n_a - bad_b / n_b) / sqrt(pooled * (1 - pooled) * (1 / n_a + 1 / n_b))
+    return 0.5 * (1 - erf(z / sqrt(2)))
+
+
+def quality_watch(device: str) -> Optional[Dict[str, Any]]:
+    """Within a week of a switch, roll back when the new model is measurably worse than
+    the previous one was in the same length of time before the switch."""
+    current = state(max_age_s=0)
+    slots = (current or {}).get("devices", {}).get(device) or {}
+    switched_at, previous = slots.get("switched_at"), slots.get("previous")
+    if not switched_at or not previous or time.time() - switched_at > QUALITY_WINDOW_S:
+        return None
+    span = time.time() - switched_at
+    after = quality_signals(device, turns_between(switched_at, time.time()), slots["active"])
+    before = quality_signals(device, turns_between(switched_at - span, switched_at))
+    findings = {}
+    for signal in after:
+        a, b = after[signal], before[signal]
+        if a[1] >= MIN_QUALITY_SAMPLES and b[1] >= MIN_QUALITY_SAMPLES:
+            findings[signal] = {"after": a, "before": b, "p": round(p_worse(a, b), 4)}
+    worse = [s for s, f in findings.items() if f["p"] <= QUALITY_SIGNIFICANCE]
+    if worse:
+        steward("POST", "/rollback", {"device": device})
+        switch_counter.add(1, {"device": device, "action": "rollback"})
+        reason = "worse since the switch: " + ", ".join(
+            f"{s} {findings[s]['after'][0]}/{findings[s]['after'][1]} vs {findings[s]['before'][0]}/{findings[s]['before'][1]}"
+            for s in worse)
+        journal("rolled_back", device=device, name=slots["active"], back_to=previous, reason=reason, findings=findings)
+        _state["at"] = 0
+    return {"device": device, "findings": findings, "rolled_back": bool(worse)}

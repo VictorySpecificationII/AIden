@@ -16,6 +16,7 @@ import mentor
 import models
 import router
 import selfcheck
+import shadow
 import toolbox
 from capabilities import get_capabilities
 from telemetry import logger, meter, tracer
@@ -209,6 +210,8 @@ def chat_completions(body: Dict[str, Any]):
         span.set_attribute("router.decided_by", decided_by)
         span.set_attribute("router.reason", reason)
         logger.info("Notes %s (%s: %s)", "needed" if wants_notes else "not needed", decided_by, reason)
+    if decided_by == "npu":
+        shadow.observe_route(prompt, wants_notes, current_trace_id())  # a candidate in shadow decides too, silently
 
     notes = []
     if wants_notes:
@@ -264,7 +267,9 @@ def chat_completions(body: Dict[str, Any]):
     def finished(tokens: int, seconds: float, unsure: bool = False, text: str = "", confidence: Optional[str] = None):
         remember("turn", {
             "trace_id": trace_id, "prompt": prompt, "prompt_chars": len(prompt), "turns_in_conversation": len(messages),
-            "decision": {"needs_notes": wants_notes, "decided_by": decided_by, "reason": reason},
+            "decision": {"needs_notes": wants_notes, "decided_by": decided_by, "reason": reason,
+                         # Which model classified (AIden may switch it): lets AIden judge it after a switch
+                         "classifier_model": router.classifier_model() if decided_by in ("npu", "fallback") else None},
             # Paths and scores only: note text is never recorded
             "notes": [{"path": n["path"], "heading": n["heading"], "score": n["score"]} for n in notes],
             "answer": {"source": "local", "backend": name, "model": model, "skipped": skipped, "stream": stream,
@@ -275,6 +280,8 @@ def chat_completions(body: Dict[str, Any]):
                        "text": text},
         })
         stage_histogram.record(time.time() - start, {"stage": "answer", "backend": name})
+        if name == "ovms-gpu":
+            shadow.observe_answer(out_messages, prompt, text, bool(notes), trace_id)  # after the user has their answer
         span.set_attribute("router.answer_tokens", tokens)
         span.set_attribute("router.unsure", unsure)
         span.set_attribute("router.confidence", confidence or "missing")

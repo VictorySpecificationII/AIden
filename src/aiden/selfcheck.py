@@ -197,13 +197,16 @@ def report(facts: Dict[str, Any]) -> str:
     if facts["failed_checks"]:
         lines.append("- Couldn't check: " + "; ".join(facts["failed_checks"]) + ".")
 
-    changes = [r for r in facts.get("model_changes") or [] if r.get("action") in ("switched", "rolled_back", "rejected")]
+    changes = [r for r in facts.get("model_changes") or []
+               if r.get("action") in ("switched", "rolled_back", "rejected", "shadow_started")]
     if changes:
         lines += ["", "**Recent model changes**"]
         for r in changes[-5:]:
             when = local(datetime.fromisoformat(r["at"]))
             if r["action"] == "switched":
                 lines.append(f"- {when}: switched my {r['device'].upper()} to {r['name']} ({r['reason']}).")
+            elif r["action"] == "shadow_started":
+                lines.append(f"- {when}: trying {r['name']} silently on my {r['device'].upper()} before switching ({r['reason']}).")
             elif r["action"] == "rolled_back":
                 lines.append(f"- {when}: rolled my {r['device'].upper()} back to {r['back_to']} ({r['reason']}).")
             else:
