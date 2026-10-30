@@ -3,7 +3,7 @@
 AIden picks models; the steward does the work, and enforces the limits itself, so a
 mistake (or a confused model) in AIden can't go past them:
 - sources: Hugging Face models of ALLOWED_ORG only, with a licence in ALLOWED_LICENCES,
-  text generation only, built for the device (NPU builds end in -cw-ov);
+  text generation only, built for the device (NPU builds end in -cw-ov, GPU in -int4-ov);
 - disk: candidates (everything but the active and previous models) stay under DISK_CAP_GB;
 - memory: a trial only starts if MIN_FREE_GB stays free with the candidate loaded;
 - one trial per device; the active and previous models are never deleted.
@@ -46,9 +46,13 @@ HF = os.environ.get("HF_ENDPOINT", "https://huggingface.co")
 DEVICES = {
     "npu": {"target": "NPU", "suffix": "-cw-ov", "pull_args": ["--max_prompt_len", "2000"],
             "server": os.environ.get("NPU_SERVER", "http://ovms-npu:8001")},
+    # INT4 builds keep a model within what an iGPU can borrow from system memory
+    "gpu": {"target": "GPU", "suffix": "-int4-ov", "pull_args": [],
+            "server": os.environ.get("GPU_SERVER", "http://ovms-gpu:8002")},
 }
 # The model each device served before the steward existed (adopted on first start)
-ADOPT = {"npu": (os.environ.get("ADOPT_NPU_SOURCE", ""), os.environ.get("ADOPT_NPU_NAME", ""))}
+ADOPT = {"npu": (os.environ.get("ADOPT_NPU_SOURCE", ""), os.environ.get("ADOPT_NPU_NAME", "")),
+         "gpu": (os.environ.get("ADOPT_GPU_SOURCE", ""), os.environ.get("ADOPT_GPU_NAME", ""))}
 
 lock = threading.Lock()
 jobs = {}

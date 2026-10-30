@@ -62,19 +62,25 @@ def test_metric_reports_each_backend():
     assert {(o.attributes["backend"], o.value) for o in senses.observe(None)} == {("ovms-gpu", 0), ("ovms-npu", 1)}
 
 
-@pytest.mark.parametrize("replies, expected", [
-    (["TOOL: current_time {}", "4"], True),                       # asks when needed, plain otherwise
-    (["TOOMANK: current_time {}", "4"], False),                   # garbled protocol (Phi)
-    (["TOOL: current_time {}", "TOWN: current_time {}"], False),  # reaches for tools when it shouldn't
-    (["It is noon.", "4"], False),                                # never asks
-    (["TOOL: current_time {}", "To answer that: 2 + 2 = 4."], True),  # plain answers may start with "To"
+@pytest.mark.parametrize("tool_reply, plain_reply, expected", [
+    ("TOOL: current_time {}", "4", True),                          # asks when needed, plain otherwise
+    ("TOOMANK: current_time {}", "4", False),                      # garbled protocol (Phi)
+    ("TOOL: current_time {}", "TOWN: current_time {}", False),     # reaches for tools when it shouldn't
+    ("It is noon.", "4", False),                                   # never asks
+    ("TOOL: current_time {}", "To answer that: 2 + 2 = 4.", True),  # plain answers may start with "To"
 ])
-def test_tool_protocol_test(monkeypatch, replies, expected):
-    answers = iter(replies)
-    monkeypatch.setattr(senses, "ask", lambda base, model, messages: next(answers))
+def test_tool_protocol_test(monkeypatch, tool_reply, plain_reply, expected):
+    needs = {q: needs_tool for q, needs_tool in senses.TOOL_TESTS}
+    monkeypatch.setattr(senses, "ask", lambda base, model, messages: tool_reply if needs[messages[-1]["content"]] else plain_reply)
     monkeypatch.setattr(senses, "tool_status", {})
     assert senses.test_tools("ovms-x", "http://x", "m")["tools"] is expected
     assert senses.tool_status["ovms-x"]["model"] == "m"
+
+
+def test_one_slip_fails_the_tool_test(monkeypatch):
+    replies = iter(["TOOL: current_time {}", "TOOL: suspends {}", "I think about 12 GB.", "4", "The sea is wide.", "Tokyo."])
+    monkeypatch.setattr(senses, "ask", lambda *a: next(replies))
+    assert senses.follows_tool_protocol("http://x", "m")[0] is False
 
 
 def test_a_model_is_tested_once_and_again_when_it_changes(monkeypatch):

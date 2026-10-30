@@ -28,9 +28,13 @@ status: Dict[str, Dict[str, Any]] = {}
 # Whether each backend's model can use AIden's tool protocol (see toolbox.py), tested once per model
 tool_status: Dict[str, Dict[str, Any]] = {}
 GARBLED_TOOL_LINE = re.compile(r"^[\s`*>]*[A-Z]{2,}:\s*[a-z_]+")
-TOOL_TESTS = [  # (question, should it ask for a tool?)
+TOOL_TESTS = [  # (question, should it ask for a tool?) Every one must go right
     ("What time is it right now?", True),
+    ("How many times has your machine slept since it booted?", True),
+    ("How much memory is free on your machine?", True),
     ("What is 2 + 2?", False),
+    ("Write one sentence about the sea.", False),
+    ("What is the capital of Japan?", False),
 ]
 
 

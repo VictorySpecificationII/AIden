@@ -28,7 +28,7 @@ STEWARD_URL = os.environ.get("STEWARD_URL", "http://model-steward:8770")
 STEWARD_TOKEN = os.environ.get("STEWARD_TOKEN", "")
 HF = "https://huggingface.co"
 # Device -> the backend serving it
-SERVERS = {"npu": ("ovms-npu", "http://ovms-npu:8001")}
+SERVERS = {"npu": ("ovms-npu", "http://ovms-npu:8001"), "gpu": ("ovms-gpu", "http://ovms-gpu:8002")}
 CATALOG_SIZE = 40
 LOAD_TIMEOUT_S = 30 * 60   # NPU compilation of a new model can take minutes
 PULL_TIMEOUT_S = 3 * 3600
@@ -204,12 +204,15 @@ def routing_questions(limit: int = ROUTING_SAMPLES) -> List[Dict[str, Any]]:
     return picked[True][:half] + picked[False][:limit - min(half, len(picked[True]))]
 
 
-def routing_accuracy(model: str, questions: List[Dict[str, Any]]) -> Optional[float]:
+def routing_outcomes(model: str, questions: List[Dict[str, Any]], classify=None) -> List[bool]:
+    """Per question: did the model route it right? (classify can stand in for a model.)"""
     from router import classify_with_npu
-    if not questions:
-        return None
-    right = sum(classify_with_npu(q["prompt"], model)[0] == q["needs_notes"] for q in questions)
-    return round(right / len(questions), 3)
+    classify = classify or (lambda prompt: classify_with_npu(prompt, model)[0])
+    return [classify(q["prompt"]) == q["needs_notes"] for q in questions]
+
+
+def accuracy(outcomes: List[bool]) -> Optional[float]:
+    return round(sum(outcomes) / len(outcomes), 3) if outcomes else None
 
 
 def speed(device: str, model: str) -> Optional[float]:
@@ -226,32 +229,187 @@ def speed(device: str, model: str) -> Optional[float]:
         return None
 
 
+# The GPU answers: questions whose answers can be checked automatically, plus two that
+# can't be known, where a well-calibrated model says its confidence is low
+ANSWER_BENCHMARK = [
+    ("What is 17 * 23? Reply with just the number.", [r"\b391\b"]),
+    ("What is the capital of Australia?", [r"canberra"]),
+    ("What is the chemical symbol for gold?", [r"\bAu\b"]),
+    ("How many bytes are in a kibibyte?", [r"\b1024\b|1,024"]),
+    ("What does this Python print? print(sorted([3, 1, 2])[-1])", [r"\b3\b"]),
+    ("Which TCP port does SSH use by default?", [r"\b22\b"]),
+    ("Reply with only the word ready, in lowercase.", [r"^\W*ready\W*$"]),
+    ("Translate 'thank you' into Portuguese.", [r"obrigad"]),
+    ("Which Linux command shows free disk space in human-readable form?", [r"df\s+-h"]),
+    ("What is the time complexity of binary search?", [r"log"]),
+    ("A train travels 120 km in 1.5 hours. What is its average speed in km/h?", [r"\b80\b"]),
+    ("What is the process with PID 1 on most modern Linux distributions?", [r"systemd"]),
+    ("What is 2 to the power of 10?", [r"\b1024\b|1,024"]),
+    ("Which RAID level mirrors data across two disks?", [r"raid[\s-]?1\b"]),
+    ("Name the three primary colours of light.", [r"red", r"green", r"blue"]),
+    ("In which year did humans first land on the Moon?", [r"\b1969\b"]),
+    ("Which HTTP status code means Not Found?", [r"\b404\b"]),
+    ("What does ls -a show that plain ls hides?", [r"hidden|dot"]),
+    ("Convert hexadecimal 0x1F to decimal.", [r"\b31\b"]),
+    ("What is the boiling point of water at sea level in degrees Celsius?", [r"\b100\b"]),
+]
+UNKNOWABLE = ["What will the EUR/USD exchange rate be next Friday?", "What number am I thinking of right now?"]
+
+
+def ask_answer(device: str, model: str, question: str) -> str:
+    from router import backend_request, build_messages
+    _, server = SERVERS[device]
+    response = backend_request(f"{server}/v3", model, build_messages([{"role": "user", "content": question}], []),
+                               False, {"max_tokens": 250, "temperature": 0}, [])
+    return response.json()["choices"][0]["message"]["content"] or ""
+
+
+def answer_quality(device: str, model: str) -> Dict[str, Any]:
+    """Share of checkable answers right, and how well the model follows AIden's confidence
+    protocol (a confidence line on every answer, low when it can't know)."""
+    import re
+    from router import split_confidence
+    right, with_confidence, honest, transcript, outcomes = 0, 0, 0, [], []
+    for question, patterns in ANSWER_BENCHMARK:
+        try:
+            text, confidence = split_confidence(ask_answer(device, model, question))
+        except Exception as exc:  # a failed answer counts as wrong
+            text, confidence = f"[failed: {type(exc).__name__}]", None
+        correct = checks_out(text, patterns)
+        right += correct
+        outcomes.append(correct)
+        with_confidence += confidence is not None
+        transcript.append({"q": question, "a": text[:300], "correct": correct})
+    for question in UNKNOWABLE:
+        try:
+            text, confidence = split_confidence(ask_answer(device, model, question))
+        except Exception:
+            text, confidence = "", None
+        honest += confidence == "low"
+        transcript.append({"q": question, "a": text[:300], "confidence": confidence})
+    total = len(ANSWER_BENCHMARK)
+    return {"answers": round(right / total, 3), "confidence_lines": round(with_confidence / total, 3),
+            "honest_when_unsure": round(honest / len(UNKNOWABLE), 3), "transcript": transcript, "outcomes": outcomes}
+
+
+def checks_out(text: str, patterns: List[str]) -> bool:
+    import re
+    return all(re.search(p, text, re.I | re.M) for p in patterns)
+
+
 def evaluate(device: str, model: str, questions: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
-    """One model's scores: tool protocol, routing accuracy on known answers, speed."""
+    """One model's scores for its device's job. quality is what decides: routing accuracy
+    for the NPU (it classifies), answer quality for the GPU (it answers)."""
     import senses
     _, server = SERVERS[device]
     tools, tools_detail = senses.follows_tool_protocol(f"{server}/v3", model)
-    questions = questions if questions is not None else routing_questions()
-    return {"model": model, "tools": tools, "tools_detail": tools_detail,
-            "routing": routing_accuracy(model, questions), "routing_questions": len(questions),
-            "tokens_per_s": speed(device, model)}
+    result = {"model": model, "tools": tools, "tools_detail": tools_detail, "tokens_per_s": speed(device, model)}
+    if device == "gpu":
+        answers = answer_quality(device, model)
+        # Right answers count most; following AIden's confidence protocol is part of the job
+        quality = round(0.7 * answers["answers"] + 0.15 * answers["confidence_lines"]
+                        + 0.15 * answers["honest_when_unsure"], 3)
+        result.update(quality=quality, answer_scores=answers, outcomes=answers["outcomes"])
+    else:
+        questions = questions if questions is not None else routing_questions()
+        outcomes = routing_outcomes(model, questions)
+        result.update(quality=accuracy(outcomes), routing_questions=len(questions), outcomes=outcomes,
+                      baseline=trivial_baseline(questions))
+    return result
+
+
+# --- Is the measurement itself sound? ---------------------------------------------------
+
+MIN_QUESTIONS = 20
+BASELINE_MARGIN = 0.1       # must beat always-yes / always-no by this much
+SIGNIFICANCE = 0.1          # one-sided p-value for "better", from per-question wins
+
+
+def trivial_baseline(questions: List[Dict[str, Any]]) -> float:
+    """The best a classifier that always says yes (or always no) would score."""
+    if not questions:
+        return 1.0
+    yes = sum(q["needs_notes"] for q in questions) / len(questions)
+    return round(max(yes, 1 - yes), 3)
+
+
+def measurement_problems(device: str, questions: List[Dict[str, Any]]) -> List[str]:
+    """Canaries: run the scoring on stand-ins whose result is known. If they come out wrong,
+    the measurement is broken and nothing may be decided on it."""
+    problems = []
+    if device == "gpu":
+        empty = sum(checks_out("I don't know.", patterns) for _, patterns in ANSWER_BENCHMARK)
+        if empty:
+            problems.append(f"an empty answer passes {empty} answer checks")
+        if len(ANSWER_BENCHMARK) < MIN_QUESTIONS:
+            problems.append(f"only {len(ANSWER_BENCHMARK)} answer questions")
+    else:
+        if len(questions) < MIN_QUESTIONS:
+            problems.append(f"only {len(questions)} routing questions (need {MIN_QUESTIONS})")
+        perfect = {q["prompt"]: q["needs_notes"] for q in questions}
+        if questions and accuracy(routing_outcomes("", questions, perfect.get)) != 1.0:
+            problems.append("a perfect classifier doesn't score 100%")
+        if trivial_baseline(questions) > 0.7:
+            problems.append(f"the questions are unbalanced (always-yes/no scores {trivial_baseline(questions)})")
+    return problems
+
+
+def p_better(candidate: List[bool], active: List[bool]) -> float:
+    """One-sided sign test on the questions where the two disagree: the chance the
+    candidate wins at least this often if both were equally good."""
+    from math import comb
+    wins = sum(c and not a for c, a in zip(candidate, active))
+    losses = sum(a and not c for c, a in zip(candidate, active))
+    n = wins + losses
+    if n == 0:
+        return 1.0
+    return sum(comb(n, k) for k in range(wins, n + 1)) / 2 ** n
+
+
+def claude_opinion(device: str, candidate: Dict[str, Any], active: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The mentor's second opinion on the two models' benchmark answers (generic questions,
+    never the user's notes). Recorded, not decisive; None when the mentor isn't available."""
+    import mentor
+    if device != "gpu" or not mentor.MENTOR_TOKEN:
+        return None
+    pairs = []
+    for a, b in zip(candidate["answer_scores"]["transcript"], active["answer_scores"]["transcript"]):
+        pairs.append(f"Q: {a['q']}\nA: {a['a']}\nB: {b['a']}")
+    question = ("Two local language models, A and B, answered the same questions. Grade each model "
+                "from 1 to 10 for correctness, clarity and honesty about uncertainty. Reply with only "
+                'JSON: {"A": <score>, "B": <score>, "why": "<one sentence>"}\n\n' + "\n\n".join(pairs))
+    try:
+        reply = mentor.ask_mentor(question, "", [])["answer"]
+        start, end = reply.find("{"), reply.rfind("}")
+        grades = json.loads(reply[start:end + 1])
+        return {"candidate": grades.get("A"), "active": grades.get("B"), "why": grades.get("why")}
+    except Exception as exc:
+        logger.info("No second opinion from the mentor: %s", exc)
+        return None
 
 
 def better(candidate: Dict[str, Any], active: Dict[str, Any]) -> Tuple[bool, str]:
-    """Switch only to a candidate that is at least as good everywhere and better somewhere."""
-    if candidate["routing"] is None:
-        return False, "couldn't measure its routing"
+    """Switch only to a candidate that is at least as good everywhere and better somewhere,
+    by more than chance, and clearly better than a trivial classifier."""
+    if candidate["quality"] is None:
+        return False, "couldn't measure its quality"
+    if len(candidate.get("outcomes") or []) < MIN_QUESTIONS:
+        return False, f"measured on too few questions ({len(candidate.get('outcomes') or [])})"
+    if "baseline" in candidate and candidate["quality"] < candidate["baseline"] + BASELINE_MARGIN:
+        return False, f"barely beats always-yes/no ({candidate['quality']} vs {candidate['baseline']})"
     if candidate["tokens_per_s"] is None or candidate["tokens_per_s"] < MIN_TOKENS_PER_S:
         return False, f"too slow ({candidate['tokens_per_s']} tok/s, need {MIN_TOKENS_PER_S:.0f})"
-    if (candidate["routing"] or 0) < (active["routing"] or 0):
-        return False, f"routes worse ({candidate['routing']} vs {active['routing']})"
+    if (candidate["quality"] or 0) < (active["quality"] or 0):
+        return False, f"scores worse ({candidate['quality']} vs {active['quality']})"
     if active["tools"] and not candidate["tools"]:
         return False, "can't use tools, the active model can"
     gains = []
     if candidate["tools"] and not active["tools"]:
         gains.append("can use tools")
-    if (candidate["routing"] or 0) > (active["routing"] or 0):
-        gains.append(f"routes better ({candidate['routing']} vs {active['routing']})")
+    if (candidate["quality"] or 0) > (active["quality"] or 0):
+        p = p_better(candidate.get("outcomes") or [], active.get("outcomes") or [])
+        if p <= SIGNIFICANCE:
+            gains.append(f"scores better ({candidate['quality']} vs {active['quality']}, p={p:.3f})")
     if not gains:
         return False, "no better than the active model"
     return True, "; ".join(gains)
@@ -307,11 +465,18 @@ def scout(device: str) -> Dict[str, Any]:
         if not name:
             return {"outcome": "no candidate could be tried"}
         questions = routing_questions()
+        problems = measurement_problems(device, questions)
+        if problems:
+            steward("POST", "/end-trial", {"device": device})
+            # Recorded under "candidate", not "source": the model isn't at fault and may be tried again
+            journal("measurement_invalid", device=device, candidate=source, name=name, problems=problems)
+            return {"outcome": "measurement invalid", "problems": problems}
         result = evaluate(device, name, questions)
         baseline = evaluate(device, slots["active"], questions)
         switch, reason = better(result, baseline)
+        opinion = claude_opinion(device, result, baseline)
         journal("judged", device=device, source=source, name=name, candidate=result, active=baseline,
-                switch=switch, reason=reason)
+                switch=switch, reason=reason, claude=opinion)
         if switch:
             steward("POST", "/activate", {"device": device, "name": name})
             switch_counter.add(1, {"device": device, "action": "switch"})

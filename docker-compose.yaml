@@ -456,7 +456,7 @@ services:
   # servers' config files (active model, trial). Enforces the limits itself (source org,
   # licences, disk and memory budgets) and never touches Docker. No published port.
   model-steward:
-    profiles: [npu]
+    profiles: [npu, intel-gpu]
     build:
       context: ./tools/model-steward
     image: intellectualplayspace/model-steward
@@ -466,6 +466,8 @@ services:
       - STEWARD_TOKEN=${STEWARD_TOKEN:?}
       - ADOPT_NPU_SOURCE=${OVMS_NPU_MODEL:?}
       - ADOPT_NPU_NAME=${OVMS_NPU_MODEL_NAME:?}
+      - ADOPT_GPU_SOURCE=${OVMS_GPU_MODEL:?}
+      - ADOPT_GPU_NAME=${OVMS_GPU_MODEL_NAME:?}
       - DISK_CAP_GB=${AIDEN_MODEL_DISK_CAP_GB:-20}
       - MIN_FREE_GB=${AIDEN_MODEL_MIN_FREE_GB:-4}
     volumes:
@@ -540,16 +542,15 @@ services:
     image: openvino/model_server:2026.4.1-gpu
     container_name: ovms-gpu
     restart: unless-stopped
+    # Serves whatever model-steward's config lists (the active model, plus a trial)
     command: >
-      --source_model ${OVMS_GPU_MODEL:?}
-      --model_name ${OVMS_GPU_MODEL_NAME:?}
-      --model_repository_path /home/ovms/models
-      --cache_dir /home/ovms/models/.ov_cache
-      --target_device GPU
-      --task text_generation
+      --config_path /home/ovms/models/config_gpu.json
       --rest_port 8002
       --metrics_enable
       --metrics_list ovms_requests_accepted,ovms_requests_rejected,ovms_responses,ovms_current_graphs,ovms_graph_error,ovms_graph_processing_time_us
+    depends_on:
+      model-steward:
+        condition: service_healthy
     devices:
       - /dev/dri:/dev/dri
     group_add:
