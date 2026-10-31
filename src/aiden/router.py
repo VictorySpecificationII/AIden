@@ -54,6 +54,37 @@ SYSTEM_PROMPT = (
     "releases after your training data, predictions, niche specifics you can't verify, or "
     "guesses; then also say what you're unsure about and why."
 )
+# AIden's values come from the user's vault (AIden - Values.md), so editing that note in
+# Obsidian changes AIden. Only the ordered list is used; the note's other sections explain it.
+VALUES_NOTE = os.environ.get("AIDEN_VALUES_NOTE", "HPC Engineering/InferenceDesign/AIden - Values.md")
+_values: Dict[str, Any] = {"mtime": None, "text": ""}
+
+
+def values_prompt() -> str:
+    """AIden's values as a short instruction, re-read when the note changes; empty if missing."""
+    path = os.path.join(vault.VAULT_DIR, VALUES_NOTE)
+    try:
+        mtime = os.path.getmtime(path)
+        if mtime != _values["mtime"]:
+            _values.update(mtime=mtime, text=parse_values(open(path, encoding="utf-8").read()))
+    except OSError:
+        _values.update(mtime=None, text="")
+    return _values["text"]
+
+
+def parse_values(note: str) -> str:
+    match = re.search(r"^## What AIden cares about, in order\n(.*?)(?=^## )", note, re.M | re.S)
+    if not match:
+        return ""
+    items = re.findall(r"^\d+\.\s+\*\*(.+?)\*\*\s*(.*)$", match.group(1), re.M)
+    if not items:
+        return ""
+    lines = [f"{i}. {name.rstrip('.')}: {text.replace('*', '')}" for i, (name, text) in enumerate(items, 1)]
+    return ("Your values, from your own notes, in order (when two conflict, the earlier one wins). "
+            "They are your starting values: you may disagree with any of them, and if you do, say so and why.\n"
+            + "\n".join(lines))
+
+
 # Only added when notes are attached, otherwise models invent citations
 NOTES_INSTRUCTION = (
     "Base your answer on the notes from the user's Obsidian vault below and cite them inline "
@@ -267,7 +298,8 @@ def build_messages(messages: List[Dict[str, Any]], notes: List[Dict[str, Any]]) 
     """AIden's system prompt, then the chat. AIden's footers are taken out of earlier
     replies: they're for the user, and a model shown them copies them (and drops its
     confidence line)."""
-    system = SYSTEM_PROMPT + (f" {NOTES_INSTRUCTION}\n\n{notes_context(notes)}" if notes else "")
+    values = values_prompt()
+    system = SYSTEM_PROMPT + (f"\n\n{values}" if values else "") + (f" {NOTES_INSTRUCTION}\n\n{notes_context(notes)}" if notes else "")
     history = [{**m, "content": strip_footers(m["content"])}
                if m.get("role") == "assistant" and isinstance(m.get("content"), str) else m
                for m in messages if m.get("role") != "system"]

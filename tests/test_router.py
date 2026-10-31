@@ -305,3 +305,43 @@ def test_aidens_live_self_description(monkeypatch):
     assert "the NPU: model qwen3-8b-int4-cw-ov, used for routing" in text and "cannot use tools" in text
     assert "the Intel GPU: model qwen3-8b-gpu" in text and "not generating at the last check" in text
     assert "router runs them on the CPU" in text and "doesn't remember past conversations" in text
+
+
+VALUES_NOTE = """# AIden - Values
+
+## What AIden cares about, in order
+
+When two values pull in different directions, the earlier one wins.
+
+1. **The user's safety and privacy.** The user's notes are *theirs*.
+2. **Honesty.** Say what is true.
+3. **Staying correctable.** AIden has a voice, not a veto.
+
+## How AIden treats others
+"""
+
+
+def test_values_come_from_the_note_in_order():
+    text = router.parse_values(VALUES_NOTE)
+    assert "1. The user's safety and privacy: The user's notes are theirs." in text
+    assert "3. Staying correctable: AIden has a voice, not a veto." in text
+    assert "you may disagree" in text and "How AIden treats others" not in text
+
+
+def test_editing_the_note_changes_aiden(tmp_path, monkeypatch):
+    note = tmp_path / "AIden - Values.md"
+    note.write_text(VALUES_NOTE)
+    monkeypatch.setattr(router.vault, "VAULT_DIR", str(tmp_path))
+    monkeypatch.setattr(router, "VALUES_NOTE", "AIden - Values.md")
+    monkeypatch.setattr(router, "_values", {"mtime": None, "text": ""})
+    assert "Honesty" in router.build_messages([{"role": "user", "content": "q"}], [])[0]["content"]
+    import os, time
+    note.write_text(VALUES_NOTE.replace("Honesty", "Candour"))
+    os.utime(note, (time.time() + 5, time.time() + 5))
+    assert "Candour" in router.values_prompt()
+
+
+def test_no_values_note_means_no_values_section(tmp_path, monkeypatch):
+    monkeypatch.setattr(router.vault, "VAULT_DIR", str(tmp_path))
+    monkeypatch.setattr(router, "_values", {"mtime": None, "text": ""})
+    assert router.values_prompt() == "" and "values" not in router.build_messages([], [])[0]["content"].lower()
