@@ -41,8 +41,9 @@ services:
     restart: unless-stopped
     networks:
       - dev
+    # Localhost only: dashboards, metrics and traces describe your conversations
     ports:
-      - "9090:9090"     # Prometheus web interface
+      - "127.0.0.1:9090:9090"     # Prometheus web interface
     volumes:
       - ./tools/sre/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./tools/sre/prometheus/rules:/etc/prometheus/rules:ro
@@ -81,15 +82,16 @@ services:
     environment:
       - METRICS_STORAGE_TYPE=prometheus
       - PROMETHEUS_SERVER_URL=http://prometheus:9090
+    # Localhost only: dashboards, metrics and traces describe your conversations
     ports:
-      - "14268:14268"  # HTTP transport, applications or agents send trace data to this endpoint over HTTP
-      - "14267:14267"  # gRPC transport, applications or agents send trace data to this endpoint over gRPC
-      - "14399:14399"  # JAEGER_QUERY_PORT
-      - "16686:16686"  # Jaeger UI
-      - "14250:14250"  # Jaeger gRPC, used for gRPC communication within Jaeger's architecture
-      - "5778:5778"    # Jaeger Admin
-      - "44317:4320"   # Onboard Otel Collector gRPC port
-      - "44318:4321"   # Onboard Otel Collector HTTP port
+      - "127.0.0.1:14268:14268"  # HTTP transport, applications or agents send trace data to this endpoint over HTTP
+      - "127.0.0.1:14267:14267"  # gRPC transport, applications or agents send trace data to this endpoint over gRPC
+      - "127.0.0.1:14399:14399"  # JAEGER_QUERY_PORT
+      - "127.0.0.1:16686:16686"  # Jaeger UI
+      - "127.0.0.1:14250:14250"  # Jaeger gRPC, used for gRPC communication within Jaeger's architecture
+      - "127.0.0.1:5778:5778"    # Jaeger Admin
+      - "127.0.0.1:44317:4320"   # Onboard Otel Collector gRPC port
+      - "127.0.0.1:44318:4321"   # Onboard Otel Collector HTTP port
     depends_on:
       - otel-collector
       - prometheus
@@ -194,8 +196,9 @@ services:
     image: grafana/grafana:13.2.4
     container_name: grafana
     restart: unless-stopped
+    # Localhost only: dashboards, metrics and traces describe your conversations
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:?}  # Set the admin password
       # Grafana 13 bundles its datasources (Prometheus, Loki...) as plugins and updates them

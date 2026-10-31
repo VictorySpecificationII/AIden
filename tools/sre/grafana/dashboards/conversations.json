@@ -1,0 +1,176 @@
+{
+  "uid": "aiden-conversations",
+  "title": "AIden's Conversations",
+  "tags": [
+    "aiden",
+    "service",
+    "conversations"
+  ],
+  "description": "What you asked, what AIden answered and decided: AIden's experience records, mirrored to Loki.",
+  "editable": false,
+  "refresh": "1m",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "AIden dashboards",
+      "type": "dashboards",
+      "tags": [
+        "aiden"
+      ],
+      "asDropdown": true
+    }
+  ],
+  "panels": [
+    {
+      "type": "logs",
+      "title": "Conversations",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "description": "Your questions and AIden's answers, newest first. Open a line's details for everything recorded, and 'Open trace' to see how AIden handled it.",
+      "gridPos": {
+        "h": 14,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service_name=\"aiden-api\"} | event=\"experience\" | json | kind=\"turn\" | line_format \"Q: {{.prompt}}\\nA: {{.answer_text}}\\n— {{.answer_model}} on {{.answer_backend}} · confidence {{.answer_confidence}} · notes needed {{.decision_needs_notes}} ({{.decision_decided_by}}) · tools {{.answer_tool_calls}}\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      },
+      "id": 1
+    },
+    {
+      "type": "logs",
+      "title": "Mentor, gear checks and your ratings",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "description": "Questions passed to Claude, gear checks, and the thumbs up/down you gave (rating, reason, comment).",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 14
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service_name=\"aiden-api\"} | event=\"experience\" | json | kind=~\"mentor|selfcheck|feedback\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      },
+      "id": 2
+    },
+    {
+      "type": "logs",
+      "title": "Model decisions",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "description": "AIden choosing their own models: pulls, trials, judgements, shadows, switches and rollbacks.",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service_name=\"aiden-api\"} | event=\"experience\" | json | kind=\"model\" | line_format \"{{.action}} · {{.device}} · {{or .source .candidate .name}} — {{.reason}}\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      },
+      "id": 3
+    },
+    {
+      "type": "logs",
+      "title": "Everything AIden recorded",
+      "datasource": {
+        "type": "loki",
+        "uid": "loki"
+      },
+      "description": "Every experience record as stored (the JSONL files remain the source of truth; Loki keeps 30 days).",
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 30
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
+          },
+          "expr": "{service_name=\"aiden-api\"} | event=\"experience\"",
+          "refId": "A",
+          "queryType": "range"
+        }
+      ],
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "sortOrder": "Descending",
+        "enableLogDetails": true,
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      },
+      "id": 4
+    }
+  ]
+}
