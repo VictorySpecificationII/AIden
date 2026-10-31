@@ -83,3 +83,5 @@ model_paths.json
 **/results
 **/iris_venv
 **/aiden_venv
+# Service passwords (bootstrap/generate-secrets.sh); never commit
+secrets/

@@ -24,7 +24,9 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 MLFLOW_TRACKING_URI = os.environ["MLFLOW_TRACKING_URI"]
 S3_ENDPOINT = os.environ["S3_ENDPOINT_URL"]
 S3_ACCESS_KEY = os.environ["MINIO_ROOT_USER"]
-S3_SECRET_KEY = os.environ["MINIO_ROOT_PASSWORD"]
+# The password lives in secrets/ (bootstrap/generate-secrets.sh), not in .env
+S3_SECRET_KEY = os.environ.get("MINIO_ROOT_PASSWORD") or open(os.environ.get(
+    "MINIO_ROOT_PASSWORD_FILE", os.path.join(os.path.dirname(__file__), "../../secrets/minio_root_password"))).read().strip()
 LLAMACPP_DIR = os.environ["LLAMACPP_DIR"]
 
 # --- Config ---
