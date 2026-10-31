@@ -523,11 +523,18 @@ services:
       --task embeddings
       --pooling LAST
       --rest_port 8003
+      --metrics_enable
+      --metrics_list ovms_requests_accepted,ovms_requests_rejected,ovms_responses,ovms_current_graphs,ovms_graph_error,ovms_graph_processing_time_us
     volumes:
       - ovms-data:/home/ovms
     networks:
       dev:
         aliases: [ovms-embed-query]
+    labels:
+      # Every vault search and indexed note is embedded here (Vector Storage dashboard)
+      prometheus.scrape: "true"
+      prometheus.port: "8003"
+      prometheus.job: "ovms-cpu-embed"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8003/v2/health/ready"]
       interval: 30s
