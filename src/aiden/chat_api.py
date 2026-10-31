@@ -243,9 +243,14 @@ def chat_completions(body: Dict[str, Any]):
             # Current span, so the outgoing HTTP call shows up as its child
             with trace.use_span(span, end_on_exit=False):
                 # The model may call AIden's read-only tools first (see toolbox.py)
+                # Each backend gets a prompt within its limit (the NPU's is small)
+                fitted, notes_kept = router.fit_prompt(name, messages, notes)
+                if notes_kept < len(notes):
+                    span.set_attribute("router.notes_dropped_for_limit", len(notes) - notes_kept)
+                    logger.info("Prompt trimmed for %s: %d of %d notes kept", name, notes_kept, len(notes))
                 response, tool_calls = toolbox.converse(
                     lambda msgs: router.backend_request(base, model, msgs, stream, body, notes),
-                    out_messages, stream, toolbox.offered(name))
+                    fitted, stream, toolbox.offered(name))
             span.set_attribute("router.tool_calls", [c["name"] for c in tool_calls])
             break
         except requests.RequestException as exc:
@@ -278,6 +283,8 @@ def chat_completions(body: Dict[str, Any]):
             "answer": {"source": "local", "backend": name, "model": model, "skipped": skipped, "stream": stream,
                        "used_notes": bool(notes), "confidence": confidence, "unsure": unsure,
                        "mentor_offered": unsure and offer_mentor, "tool_calls": tool_calls,
+                       # Claimed to act on the machine without any tool: never train on it as is
+                       "unbacked_claims": router.unbacked_claims(text, bool(tool_calls)),
                        "tokens": tokens, "seconds": round(seconds, 2),
                        "tokens_per_second": round(tokens / seconds, 1) if tokens and seconds > 0 else None,
                        "text": text},
@@ -299,7 +306,8 @@ def chat_completions(body: Dict[str, Any]):
     if stream:
         route = router.route_footer(name, model, router.passed_over(name, candidates, skipped),
                                     [c["name"] for c in tool_calls])
-        return StreamingResponse(router.stream_answer(response, notes, finished, route, offer_mentor), media_type="text/event-stream")
+        return StreamingResponse(router.stream_answer(response, notes, finished, route, offer_mentor, bool(tool_calls)),
+                                 media_type="text/event-stream")
 
     result = response.json()
     usage = result.get("usage", {})
@@ -309,7 +317,8 @@ def chat_completions(body: Dict[str, Any]):
         answer, confidence = router.split_confidence(result["choices"][0]["message"]["content"])
         unsure = confidence == "low"
         offer = f"\n\n*{router.MENTOR_OFFER}*" if unsure and offer_mentor else ""
-        result["choices"][0]["message"]["content"] = (answer + router.sources_footer(notes, answer) + offer
+        honesty = f"\n\n{router.UNBACKED_NOTE}" if router.unbacked_claims(answer, bool(tool_calls)) else ""
+        result["choices"][0]["message"]["content"] = (answer + router.sources_footer(notes, answer) + honesty + offer
                                                      + router.route_footer(name, model, router.passed_over(name, candidates, skipped),
                                                                            [c["name"] for c in tool_calls]))
     finished(usage.get("completion_tokens", 0), time.time() - start, unsure, answer if result.get("choices") else "", confidence)

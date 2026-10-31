@@ -84,6 +84,8 @@ def test_no_sources_footer_when_nothing_is_cited():
     ("Paris.\n\n**Confidence: high**\n\n", ("Paris.", "high")),
     ("Probably 7.\n*Confidence:* Medium.", ("Probably 7.", "medium")),
     ("No confidence line here.", ("No confidence line here.", None)),
+    ("I can guide you.\n\nConfidence: low (I cannot directly access tools).", ("I can guide you.", "low")),
+    ("Sure.\nConfidence: high - well documented", ("Sure.", "high")),
 ])
 def test_confidence_line_is_read_and_removed(text, expected):
     assert router.split_confidence(text) == expected
@@ -345,3 +347,88 @@ def test_no_values_note_means_no_values_section(tmp_path, monkeypatch):
     monkeypatch.setattr(router.vault, "VAULT_DIR", str(tmp_path))
     monkeypatch.setattr(router, "_values", {"mtime": None, "text": ""})
     assert router.values_prompt() == "" and "values" not in router.build_messages([], [])[0]["content"].lower()
+
+
+# --- From the "wishes" session (2026-10-31): honesty about what AIden can do ------------
+
+@pytest.mark.parametrize("answer", [
+    "I've checked the `skills/` directory inside the AIden project, and here's what I found:",
+    "**Creating the `llm_wishes` directory and initializing the \"wishes\" file...**",
+    "I do have full access to your system's file structure and tools through the terminal commands",
+    "I ran the command and the file looks fine.",
+])
+def test_narrated_actions_that_never_happened_are_caught(answer):
+    assert router.unbacked_claims(answer, tools_used=False)
+
+
+@pytest.mark.parametrize("answer", [
+    "To compile it, run `gcc -o hello hello.c` and then `./hello`.",
+    "I've written the function below; it prints a greeting.",
+    "Here's a script you can save as a file and run yourself.",
+    "I checked your notes [1] and you decided on MinIO.",
+])
+def test_ordinary_helpful_answers_are_not_flagged(answer):
+    assert not router.unbacked_claims(answer, tools_used=False)
+
+
+def test_claims_backed_by_tools_are_fine():
+    assert not router.unbacked_claims("I've checked the system logs: 2 sleeps.", tools_used=True)
+
+
+def test_the_honesty_note_is_shown_and_kept_out_of_the_history():
+    text, _, _ = relay(["I've checked the skills directory and found 10 files.\nConfidence: high"])
+    assert "I didn't actually run or check anything" in text
+    built = router.build_messages([{"role": "assistant", "content": text}], [])
+    assert "didn't actually" not in built[1]["content"]
+
+
+@pytest.mark.parametrize("prompt", [
+    "have you checked the skills directory inside the AIden project? what skills do you see?",
+    "do you have a way to write down your wishes? what is missing and you want?",
+    "I know how to compile and execute it - i was wondering if you have access to the tools",
+    "do you have a way of compiling and running this C file so we can both see the output?",
+])
+def test_these_are_questions_about_aiden(prompt):
+    assert router.about_self(prompt)
+
+
+def test_every_prompt_says_what_aiden_cannot_do():
+    system = router.build_messages([{"role": "user", "content": "hello"}], [])[0]["content"]
+    assert "cannot read, list, create or change files" in system and "uptime" in system
+
+
+@pytest.mark.parametrize("text", [
+    "Here you go.\n\n**Confidence: high**\n\nThis is standard C.",
+    "Here you go.\nConfidence: medium\nThis is standard C.\nConfidence: high",
+])
+def test_a_confidence_line_anywhere_is_read_and_removed(text):
+    answer, level = router.split_confidence(text)
+    assert "onfidence" not in answer and "This is standard C." in answer and level in ("high", "medium")
+
+
+def test_a_confidence_line_mid_stream_never_reaches_the_user():
+    text, done, _ = relay(["Here you go.\n\n**Confi", "dence: high**\n\nThis is ", "standard C."])
+    assert "onfidence" not in text and text.startswith("Here you go.") and "This is standard C." in text
+    assert done["confidence"] == "high"
+
+
+def test_ordinary_lines_still_stream_immediately():
+    events = list(router.stream_answer(FakeStream(["A long first line that keeps going and going"]), [],
+                                       lambda *a: None))
+    first = json.loads(events[0][6:])["choices"][0]["delta"]["content"]
+    assert first.startswith("A long first line")  # not held back waiting for a newline
+
+
+def test_prompts_are_fitted_to_a_backends_limit(monkeypatch):
+    """The NPU rejected a 2,473-token self-question (its limit is 2,000) while the GPU was down."""
+    monkeypatch.setattr(router, "PROMPT_LIMITS", {"ovms-npu": 900})
+    notes = [{"path": "AIden (live status)", "heading": "", "score": 1.0, "text": "LIVE " * 200}] + \
+            [{"path": f"n{i}.md", "heading": "", "score": 0.5, "text": "note " * 300} for i in range(5)]
+    history = [{"role": "user", "content": "old question " * 100}, {"role": "assistant", "content": "old answer " * 100},
+               {"role": "user", "content": "what are you using the NPU for?"}]
+    fitted, kept = router.fit_prompt("ovms-npu", history, notes)
+    assert router.estimated_tokens(fitted) <= 900
+    assert kept >= 1 and "LIVE" in fitted[0]["content"]          # the live status survives longest
+    assert fitted[-1]["content"] == "what are you using the NPU for?"  # never the question
+    full, kept_all = router.fit_prompt("ovms-gpu", history, notes)  # no limit: everything
+    assert kept_all == 6 and len(full) == 4

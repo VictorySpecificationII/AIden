@@ -37,7 +37,9 @@ MIN_NOTE_SCORE = float(os.environ.get("AIDEN_MIN_NOTE_SCORE", "0.45"))
 # The local model ends every reply with "Confidence: high|medium|low"; the router removes
 # that line and treats "low" as doubt. (A marker the model should add "only when unsure"
 # didn't work: Qwen3-8B added it to every answer, even "12 times 12".)
-CONFIDENCE_LINE = re.compile(r"\n?[ \t*_]*confidence[ \t*_]*:[ \t*_]*(high|medium|low)[ \t*_.]*\s*$", re.IGNORECASE)
+# "Confidence: low", optionally followed by a short explanation ("Confidence: low (I can't…)")
+CONFIDENCE_LINE = re.compile(r"\n?[ \t*_]*confidence[ \t*_]*:[ \t*_]*(high|medium|low)[ \t*_.]*(?:[(\-—–:,][^\n]*)?\s*$",
+                             re.IGNORECASE)
 CONFIDENCE_HOLD = len("**Confidence: medium**") + 4
 MENTOR_OFFER = "I'm not confident about this one. Say \"ask Claude\" if you'd like a second opinion."
 ANSWER_TIMEOUT_S = 180       # whole non-streamed answer
@@ -83,6 +85,17 @@ def parse_values(note: str) -> str:
     return ("Your values, from your own notes, in order (when two conflict, the earlier one wins). "
             "They are your starting values: you may disagree with any of them, and if you do, say so and why.\n"
             + "\n".join(lines))
+
+
+def capabilities_prompt() -> str:
+    """What AIden can and can't do, in every prompt: without it, a model asked "have you
+    checked the folder?" invents a folder and narrates checking it."""
+    import toolbox
+    return ("What you can and can't do: you answer in this chat, use the user's notes when they are attached "
+            "below, and, when tools are offered, call these read-only tools: " + ", ".join(toolbox.TOOLS) + ". "
+            "You cannot read, list, create or change files or folders, run shell commands, compile or run code, "
+            "browse the web, or remember earlier chats. Never claim or narrate doing any of these; if asked, say "
+            "plainly that you can't, and suggest how the user could do it.")
 
 
 # Only added when notes are attached, otherwise models invent citations
@@ -134,6 +147,11 @@ SELF_PATTERNS = [
     r"\bhow (do|does|did|are|were) (you|aiden)\b",
     r"\b(what|which) (models?|components?|devices?)\b.*\b(available|running|loaded|active|npu|gpu|cpu)\b",
     r"\b(can|will|do) you remember\b",
+    r"\b(do|can|could|did|have|are) you (?:have |even |actually )*(access|run|execute|compile|create|open|read|install|"
+    r"check|checked|look at|looked at|see|able to)\b",
+    r"\b(you|your)\b.*\b(files?|folders?|director(?:y|ies)|skills?|file ?system|terminal|shell|wishes)\b",
+    r"\b(files?|folders?|director(?:y|ies)|skills?)\b.*\b(you|your)\b",
+    r"\bwhat do you (want|need|wish)\b",
 ]
 SELF_NOTES = [n.strip() for n in os.environ.get(
     "AIDEN_SELF_NOTES", "AIden - Architecture (As Built),AIden - Mind (Memory, Learning, Curiosity)").split(",")]
@@ -242,12 +260,51 @@ def sources_footer(notes: List[Dict[str, Any]], answer: str) -> str:
     return "\n\nSources:\n" + "\n".join(lines) if lines else ""
 
 
+# A whole line that is a confidence line, wherever it is (models don't always put it last)
+CONFIDENCE_ONLY_LINE = re.compile(r"^[ \t*_>]*confidence[ \t*_]*:[ \t*_]*(high|medium|low)[ \t*_.]*(?:[(\-—–:,].*)?$",
+                                  re.IGNORECASE)
+
+
 def split_confidence(text: str) -> Tuple[str, Optional[str]]:
-    """Remove the trailing confidence line; (text, "high"/"medium"/"low" or None)."""
+    """Remove confidence lines wherever they are; (text, the last one's level or None)."""
     match = CONFIDENCE_LINE.search(text)
-    if not match:
-        return text, None
-    return text[:match.start()].rstrip(), match.group(1).lower()
+    if match:  # the usual case: a trailing line, possibly run on after the answer
+        text, level = text[:match.start()], match.group(1).lower()
+    else:
+        level = None
+    kept = []
+    for line in text.split("\n"):
+        found = CONFIDENCE_ONLY_LINE.match(line.strip())
+        if found:
+            level = level or found.group(1).lower()
+        else:
+            kept.append(line)
+    return "\n".join(kept).strip(), level
+
+
+def could_become_confidence_line(partial: str) -> bool:
+    """While a line is still streaming: could it turn out to be a confidence line?"""
+    start = re.sub(r"^[ \t*_>]*", "", partial).lower()
+    return "confidence".startswith(start) if len(start) < len("confidence") else start.startswith("confidence")
+
+
+# Claims of having acted on the machine (files, commands, the system) that AIden can't do
+UNBACKED_CLAIMS = [
+    re.compile(r"\bI(?:'ve| have)?\s+(?:just\s+|already\s+)?(checked|created|ran|run|executed|saved|compiled|listed|opened|"
+               r"installed|inspected|looked (?:at|in|into)|verified|logged)\b[^.\n]{0,60}\b(file|files|folder|director(?:y|ies)|"
+               r"command|terminal|shell|disk|system|logs?|path|repo(?:sitory)?|codebase|code base)\b", re.IGNORECASE),
+    re.compile(r"^\W*(Creating|Running|Executing|Checking|Compiling|Writing|Saving)\b[^\n]{0,80}\b(file|director(?:y|ies)|folder|"
+               r"command|program)\b", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"\bI (?:do )?have (?:full |direct )?access to (?:your |the )?(?:local )?(?:system'?s? )?"
+               r"(?:file|terminal|shell|tools like|machine|computer)", re.IGNORECASE),
+]
+UNBACKED_NOTE = ("*I didn't actually run or check anything here: I can't access files or run commands. "
+                 "Treat any steps above as a suggestion, not something that happened.*")
+
+
+def unbacked_claims(text: str, tools_used: bool) -> bool:
+    """Does the answer claim AIden did something on the machine that no tool did?"""
+    return not tools_used and any(p.search(text or "") for p in UNBACKED_CLAIMS)
 
 
 def split_unsure(text: str) -> Tuple[str, bool]:
@@ -286,7 +343,7 @@ def candidate_backends(capabilities) -> List[Tuple[str, str, str]]:
 
 
 # Where AIden's footers start in a reply (sources, "answered by …", the mentor offer)
-FOOTER_START = re.compile(r"\n\n(Sources:|\*answered by |\*I'm not confident)")
+FOOTER_START = re.compile(r"\n\n(Sources:|\*answered by |\*I'm not confident|\*I didn't actually run)")
 
 
 def strip_footers(text: str) -> str:
@@ -294,12 +351,43 @@ def strip_footers(text: str) -> str:
     return (text[:match.start()] if match else text or "").strip()
 
 
+# Prompt limits in tokens, per backend (the NPU compiles for a fixed maximum, 2000 at pull time),
+# with room for tool instructions and the reply's start. "ovms-npu=1600,other=…"
+PROMPT_LIMITS = {k: int(v) for k, v in (item.split("=") for item in
+                 os.environ.get("AIDEN_PROMPT_LIMITS", "ovms-npu=1600").split(",") if "=" in item)}
+CHARS_PER_TOKEN = 3.2  # a cautious estimate: real text is closer to 4
+
+
+def estimated_tokens(messages: List[Dict[str, Any]]) -> int:
+    return int(sum(len(m["content"]) for m in messages if isinstance(m.get("content"), str)) / CHARS_PER_TOKEN)
+
+
+def fit_prompt(backend: str, messages: List[Dict[str, Any]], notes: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], int]:
+    """The prompt for one backend, within its limit. Dropped in this order: the lowest-ranked
+    notes (keeping the first, which is the live status for questions about AIden), then the
+    oldest turns, then the first note. Never the question. Returns (messages, notes kept)."""
+    limit = PROMPT_LIMITS.get(backend)
+    kept, history = list(notes), [m for m in messages if m.get("role") != "system"]
+    built = build_messages(history, kept)
+    too_long = lambda: limit and estimated_tokens(built) > limit
+    while too_long() and len(kept) > 1:
+        kept.pop()
+        built = build_messages(history, kept)
+    while too_long() and len(history) > 1:
+        history = history[1:]
+        built = build_messages(history, kept)
+    while too_long() and kept:
+        kept.pop()
+        built = build_messages(history, kept)
+    return built, len(kept)
+
+
 def build_messages(messages: List[Dict[str, Any]], notes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """AIden's system prompt, then the chat. AIden's footers are taken out of earlier
     replies: they're for the user, and a model shown them copies them (and drops its
     confidence line)."""
     values = values_prompt()
-    system = SYSTEM_PROMPT + (f"\n\n{values}" if values else "") + (f" {NOTES_INSTRUCTION}\n\n{notes_context(notes)}" if notes else "")
+    system = SYSTEM_PROMPT + f"\n\n{capabilities_prompt()}" + (f"\n\n{values}" if values else "") + (f" {NOTES_INSTRUCTION}\n\n{notes_context(notes)}" if notes else "")
     history = [{**m, "content": strip_footers(m["content"])}
                if m.get("role") == "assistant" and isinstance(m.get("content"), str) else m
                for m in messages if m.get("role") != "system"]
@@ -364,13 +452,16 @@ def sse_chunk(content: str, finish: Optional[str] = None) -> str:
     return f"data: {json.dumps(chunk)}\n\n"
 
 
-def stream_answer(response: requests.Response, notes, on_done, route: str = "", offer_mentor: bool = False) -> Iterator[str]:
+def stream_answer(response: requests.Response, notes, on_done, route: str = "", offer_mentor: bool = False,
+                  tools_used: bool = False) -> Iterator[str]:
     """Relay the backend's SSE stream, add the sources and route footers before [DONE].
 
-    The last few characters are held back until the end, so the confidence line can be
-    removed before it reaches the user."""
+    Text streams as it comes, line by line: a line that is a confidence line is dropped
+    wherever it appears, and only a line that starts like one is held until it's complete.
+    The last few characters are also held back, for a confidence line run on at the end."""
     tokens, start, answer, pending = 0, time.time(), [], ""
     hold = CONFIDENCE_HOLD
+    owed = ""  # a line's newline is sent with the next text, so a dropped line leaves no gap
     # SSE responses carry no charset, and requests would otherwise decode them as Latin-1
     response.encoding = "utf-8"
     for line in response.iter_lines(decode_unicode=True):
@@ -387,18 +478,27 @@ def stream_answer(response: requests.Response, notes, on_done, route: str = "", 
             tokens += 1
             answer.append(content)
             pending += content
-            # Keep back trailing whitespace plus the last few visible characters, so the
-            # marker can't be partly sent even when the model adds newlines after it
-            cut = len(pending.rstrip()) - hold
-            if cut > 0:
-                yield sse_chunk(pending[:cut])
-                pending = pending[cut:]
+            # Complete lines: drop confidence lines, send the rest
+            while "\n" in pending:
+                line, pending = pending.split("\n", 1)
+                if not CONFIDENCE_ONLY_LINE.match(line.strip()):
+                    yield sse_chunk(owed + line)
+                    owed = "\n"
+            # The unfinished line: send it unless it might become a confidence line, keeping
+            # back the last few characters in case one is run on at the very end
+            if not could_become_confidence_line(pending):
+                cut = len(pending.rstrip()) - hold
+                if cut > 0:
+                    yield sse_chunk(owed + pending[:cut])
+                    pending, owed = pending[cut:], ""
         except (ValueError, KeyError, IndexError):
             continue
     text, confidence = split_confidence("".join(answer))
     unsure = confidence == "low"
     pending, _ = split_confidence(pending)
-    footer = (pending if text.endswith(pending) else "") + sources_footer(notes, text)
+    footer = (owed + pending if pending and text.endswith(pending) else "") + sources_footer(notes, text)
+    if unbacked_claims(text, tools_used):
+        footer += f"\n\n{UNBACKED_NOTE}"
     if unsure and offer_mentor:
         footer += f"\n\n*{MENTOR_OFFER}*"
     footer += route
