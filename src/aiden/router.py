@@ -78,17 +78,34 @@ def background_task(prompt: str) -> Optional[str]:
 # --- Step 1: does this request need the user's notes? -------------------------
 
 NOTES_PATTERNS = [
-    r"\bmy (notes?|vault|obsidian|knowledge ?base)\b",
+    r"\bmy (notes?|vault|obsidian|knowledge ?base|clients?)\b",
     r"\bwhat (did|do|have) i (decide|write|wrote|note|say|plan|think)\b",
     r"\b(did|have) i (decide|write|note|mention|plan)\b",
-    r"\b(last|this|previous) (week|month|meeting|call|session)\b",
+    # "this session" is the current chat, not a time to look up; "last session" may be in the notes
+    r"\b(last|this|previous) (week|month|meeting|call)\b",
+    r"\b(last|previous) session\b",
     r"\bremind me\b",
-    r"\b(aiden|hive|legion|client|clients)\b",
+    # The user's machines and projects. Not "aiden": AIden's own name is how people talk to
+    # them ("hey AIden, …"); questions about AIden are handled by SELF_PATTERNS
+    r"\b(hive|legion)\b",
     r"\bin my\b.*\b(project|plan|setup|runbook|notes?)\b",
 ]
 NO_NOTES_PATTERNS = [
-    r"^\s*(hi|hello|hey|thanks|thank you|ok|okay|cool|great)\b[\s!.]*$",
+    r"^\s*(hi|hello|hey|thanks|thank you|ok|okay|cool|great)\b[\s!.,]*(aiden)?[\s!.]*$",
+    # About the conversation itself: it's in the chat history, not the vault
+    r"\b(this|our|the current) (session|chat|conversation)\b",
 ]
+# Questions about AIden themselves: answered from AIden's own description in the vault
+# (SELF_NOTES), not guessed. Checked before the other rules.
+SELF_PATTERNS = [
+    r"\b(you|your|yourself|aiden'?s?)\b.*\b(npu|gpu|cpu|hardware|system|architecture|models?|tools?|memory|"
+    r"remember|router|routing|mentor|steward|senses|gear check|devices?|components?|vault|built|work)\b",
+    r"\bhow (do|does|did|are|were) (you|aiden)\b",
+    r"\b(what|which) (models?|components?|devices?)\b.*\b(available|running|loaded|active|npu|gpu|cpu)\b",
+    r"\b(can|will|do) you remember\b",
+]
+SELF_NOTES = [n.strip() for n in os.environ.get(
+    "AIDEN_SELF_NOTES", "AIden - Architecture (As Built),AIden - Mind (Memory, Learning, Curiosity)").split(",")]
 _note_titles: List[str] = []
 
 
@@ -107,6 +124,8 @@ def note_titles() -> List[str]:
 def rules_decide(prompt: str) -> Tuple[Optional[bool], str]:
     """(True/False when a rule settles it, None when it's unclear; which rule)."""
     text = prompt.lower()
+    if about_self(text):
+        return True, "about AIden themselves: answer from their own description"
     for pattern in NO_NOTES_PATTERNS:
         if re.search(pattern, text):
             return False, f"no-notes pattern {pattern}"
@@ -157,9 +176,22 @@ def needs_notes(prompt: str) -> Tuple[bool, str, str]:
 
 # --- Step 2: retrieve ---------------------------------------------------------
 
+def about_self(prompt: str) -> bool:
+    text = prompt.lower()
+    return any(re.search(p, text) for p in SELF_PATTERNS)
+
+
+def is_self_note(path: str) -> bool:
+    return os.path.splitext(os.path.basename(path))[0] in SELF_NOTES
+
+
 def retrieve(prompt: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """(notes kept, all matches before the score threshold)."""
+    """(notes kept, all matches before the score threshold). A question about AIden
+    themselves only gets AIden's own description (SELF_NOTES), not plans or ideas."""
     try:
+        if about_self(prompt):
+            results = [r for r in vault.search(prompt, limit=MAX_NOTES * 6) if is_self_note(r["path"])][:MAX_NOTES]
+            return results, results  # relevant by construction: no score threshold
         results = vault.search(prompt, limit=MAX_NOTES)
     except (requests.RequestException, KeyError, ValueError):
         return [], []
@@ -222,9 +254,23 @@ def candidate_backends(capabilities) -> List[Tuple[str, str, str]]:
     return candidates + degraded
 
 
+# Where AIden's footers start in a reply (sources, "answered by …", the mentor offer)
+FOOTER_START = re.compile(r"\n\n(Sources:|\*answered by |\*I'm not confident)")
+
+
+def strip_footers(text: str) -> str:
+    match = FOOTER_START.search(text or "")
+    return (text[:match.start()] if match else text or "").strip()
+
+
 def build_messages(messages: List[Dict[str, Any]], notes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """AIden's system prompt, then the chat. AIden's footers are taken out of earlier
+    replies: they're for the user, and a model shown them copies them (and drops its
+    confidence line)."""
     system = SYSTEM_PROMPT + (f" {NOTES_INSTRUCTION}\n\n{notes_context(notes)}" if notes else "")
-    history = [m for m in messages if m.get("role") != "system"]
+    history = [{**m, "content": strip_footers(m["content"])}
+               if m.get("role") == "assistant" and isinstance(m.get("content"), str) else m
+               for m in messages if m.get("role") != "system"]
     return [{"role": "system", "content": system}] + history
 
 

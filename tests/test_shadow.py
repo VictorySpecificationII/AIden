@@ -87,7 +87,9 @@ def test_low_memory_ends_the_shadow_early(world, monkeypatch):
     monkeypatch.setattr(evals, "claude_verdicts", lambda pairs, seed: None)
     result = shadow.check("gpu")
     assert result["outcome"] == "switched"  # no evidence against it: benchmarks stand
-    switched = [json.loads(l) for l in open(f"{experience.EXPERIENCE_DIR}/2026-10-30.jsonl") if '"switched"' in l][-1]
+    import glob
+    lines = [l for f in sorted(glob.glob(f"{experience.EXPERIENCE_DIR}/*.jsonl")) for l in open(f)]
+    switched = [json.loads(l) for l in lines if '"switched"' in l][-1]
     assert "shadow inconclusive: 0 pairs" in switched["reason"]
 
 

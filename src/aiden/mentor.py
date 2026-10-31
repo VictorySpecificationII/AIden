@@ -23,16 +23,14 @@ MENTOR_TRIGGERS = [
     r"\bsecond opinion\b",
     r"\bnot sure either\b",
 ]
-FOOTER_START = re.compile(r"\n\n(Sources:|\*answered by |\*I'm not confident)")
+
 
 
 def wants_mentor(prompt: str) -> bool:
     return any(re.search(p, prompt.lower()) for p in MENTOR_TRIGGERS)
 
 
-def strip_footers(text: str) -> str:
-    match = FOOTER_START.search(text or "")
-    return (text[:match.start()] if match else text or "").strip()
+strip_footers = router.strip_footers  # AIden's footers, defined with the replies that carry them
 
 
 def mentor_question(messages: List[Dict[str, Any]], prompt: str) -> Tuple[str, str, bool]:

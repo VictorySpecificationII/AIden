@@ -180,3 +180,35 @@ def get_capabilities():
                 _capabilities_cache["value"] = gather_capabilities()
                 _capabilities_cache["at"] = time.time()
             return _capabilities_cache["value"]
+
+
+def live_self(caps: Optional[CapabilitiesResponse] = None) -> str:
+    """AIden's current state in words, for questions about AIden themselves. Notes in the
+    vault describe how AIden was built; this says what is true now, and wins."""
+    import models
+    import toolbox
+    caps = caps or get_capabilities()
+    by_name = {b.name: b for b in caps.backends}
+    roles = {"ovms-npu": ("the NPU", "routing (does a message need the user's notes? yes/no), chat-UI tasks "
+                          "(titles, tags, follow-ups) and fallback answers"),
+             "ovms-gpu": ("the Intel GPU", "writing answers")}
+    lines = ["AIden right now (live state; where a note says otherwise, this is current):"]
+    for name, (device, job) in roles.items():
+        b = by_name.get(name)
+        if not b or not b.available:
+            continue
+        model = models.active_model(name) or (b.models[0] if b.models else "no model")
+        state = "generating" if b.generating else ("not generating at the last check" if b.generating is False else "not checked yet")
+        lines.append(f"- {device}: model {model}, used for {job}; {state}; "
+                     f"{'can' if toolbox.offered(name) else 'cannot'} use tools.")
+    lines += [
+        "- The CPU: runs AIden's router, embeds questions and notes for vault search, and runs the tools themselves.",
+        "- Tools: the answering model asks for them with TOOL: lines; AIden's router runs them on the CPU. They are "
+        "read-only: time, uptime, memory, load, sleeps, the kernel's GPU warnings, model health, containers.",
+        "- Models are chosen by AIden: candidates are tried, judged and switched only on evidence (the model steward does the work).",
+        "- Memory: the current chat, plus the user's Obsidian vault (read-only). AIden doesn't remember past "
+        "conversations yet; something said in this chat is gone in a new one.",
+        f"- Mentor: Claude, {'reachable' if caps.mentor.reachable and caps.mentor.configured else 'not reachable right now'}.",
+        f"- Summary: {caps.summary}",
+    ]
+    return "\n".join(lines)

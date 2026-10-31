@@ -235,3 +235,73 @@ def test_ui_background_tasks_are_recognised():
     assert router.background_task("### Task:") == "unspecified"
     assert router.background_task("### Task: Suggest follow-ups") == "Suggest follow-ups"
     assert router.background_task("What is a task in Linux?") is None
+
+
+# --- From the user's first real session (2026-10-30) -----------------------------------
+
+def test_footers_are_taken_out_of_the_history_the_models_see():
+    history = [{"role": "user", "content": "2 times 2?"},
+               {"role": "assistant", "content": "4.\n\n*answered by qwen3-8b-gpu on the Intel GPU; looked at: uptime*"},
+               {"role": "assistant", "content": "Maybe.\n\n*I'm not confident about this one. Say \"ask Claude\"*"},
+               {"role": "assistant", "content": "Yes [1].\n\nSources:\n[1] a/One.md"},
+               {"role": "user", "content": "and 3 times 3?\n\n*answered by me*"}]
+    built = router.build_messages(history, [])
+    assert [m["content"] for m in built[1:]] == ["2 times 2?", "4.", "Maybe.", "Yes [1].", "and 3 times 3?\n\n*answered by me*"]
+
+
+@pytest.mark.parametrize("prompt", [
+    "hey AIden, what is the capital of France?",       # AIden's name isn't a notes signal
+    "is it in your knowledge base? or in this session only?",
+    "what did we say earlier in this chat?",
+])
+def test_these_dont_search_the_notes(monkeypatch, prompt):
+    monkeypatch.setattr(router, "note_titles", lambda: [])
+    monkeypatch.setattr(router, "about_self", lambda text: False)
+    assert router.rules_decide(prompt)[0] is not True
+
+
+def test_the_conversation_itself_is_not_in_the_notes(monkeypatch):
+    monkeypatch.setattr(router, "note_titles", lambda: [])
+    assert router.rules_decide("is it in your knowledge base? or in this session only?")[0] is False
+
+
+@pytest.mark.parametrize("prompt", [
+    "so are the tool calls handled by the NPU or the CPU or the GPU in your system?",
+    "What are you using the NPU for?",
+    "what models are available for use, and on which components? (NPU, GPU, CPU)",
+    "Can you remember a name? The name is Melissa",
+    "how do you decide whether to search my notes?",
+])
+def test_questions_about_aiden_use_their_own_description(prompt):
+    decision, reason = router.rules_decide(prompt)
+    assert decision is True and "about AIden themselves" in reason
+
+
+@pytest.mark.parametrize("prompt", ["What is the capital of France?", "Explain how TCP slow start works",
+                                    "How do I reverse a list in Python?"])
+def test_ordinary_questions_are_not_about_aiden(prompt):
+    assert not router.about_self(prompt)
+
+
+def test_self_questions_only_get_aidens_description_not_plans(monkeypatch):
+    hits = [{"path": "HPC Engineering/InferenceDesign/AIden - NPU Adaptation & Next Steps.md", "score": 0.9, "heading": "", "text": "plan"},
+            {"path": "HPC Engineering/InferenceDesign/AIden - Architecture (As Built).md", "score": 0.4, "heading": "", "text": "fact"},
+            {"path": "HPC Engineering/InferenceDesign/AIden - Reasoning Engine Design.md", "score": 0.8, "heading": "", "text": "idea"}]
+    monkeypatch.setattr(router.vault, "search", lambda q, limit: hits)
+    kept, _ = router.retrieve("what are you using the NPU for?")
+    assert [n["text"] for n in kept] == ["fact"]  # even below the usual score threshold
+
+
+def test_aidens_live_self_description(monkeypatch):
+    from types import SimpleNamespace
+    import capabilities, models, toolbox
+    caps = SimpleNamespace(
+        backends=[SimpleNamespace(name="ovms-npu", available=True, models=["qwen3-8b-int4-cw-ov"], generating=True),
+                  SimpleNamespace(name="ovms-gpu", available=True, models=["qwen3-8b-gpu"], generating=False)],
+        mentor=SimpleNamespace(reachable=True, configured=True), summary="I'm running on a machine with an Intel NPU.")
+    monkeypatch.setattr(models, "active_model", lambda name: None)
+    monkeypatch.setattr(toolbox, "offered", lambda name: name == "ovms-gpu")
+    text = capabilities.live_self(caps)
+    assert "the NPU: model qwen3-8b-int4-cw-ov, used for routing" in text and "cannot use tools" in text
+    assert "the Intel GPU: model qwen3-8b-gpu" in text and "not generating at the last check" in text
+    assert "router runs them on the CPU" in text and "doesn't remember past conversations" in text

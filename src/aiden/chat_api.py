@@ -18,7 +18,7 @@ import router
 import selfcheck
 import shadow
 import toolbox
-from capabilities import get_capabilities
+from capabilities import get_capabilities, live_self
 from telemetry import logger, meter, tracer
 
 api = APIRouter()
@@ -218,6 +218,9 @@ def chat_completions(body: Dict[str, Any]):
         with tracer.start_as_current_span("router.retrieve") as span:
             start = time.time()
             notes, matches = router.retrieve(prompt)
+            if router.about_self(prompt):
+                # Live facts first: the notes describe how AIden was built, this is what's true now
+                notes = [{"path": "AIden (live status)", "heading": "", "score": 1.0, "text": live_self()}] + notes
             stage_histogram.record(time.time() - start, {"stage": "retrieve"})
             span.set_attribute("router.embed_device", "cpu")
             span.set_attribute("router.min_score", router.MIN_NOTE_SCORE)
