@@ -63,6 +63,13 @@ def shingles(text: str, size: int = SHINGLE_WORDS) -> set:
     return {tuple(words[i:i + size]) for i in range(len(words) - size + 1)}
 
 
+# Notes that describe AIden rather than the user's life: text resembling them may go to the
+# mentor (the user's decision, 2026-10-31). Every other note still blocks, failing closed.
+AIDEN_OWN_NOTES = {n.strip() for n in os.environ.get(
+    "AIDEN_OWN_NOTES", "AIden - Values,AIden - Architecture (As Built),AIden - Mind (Memory, Learning, Curiosity),"
+    "AIden - The Commons (Working With Agents)").split(",")}
+
+
 def draft_privacy(draft: str) -> Tuple[bool, str, List[Dict[str, Any]]]:
     """(safe to send, why, closest notes). Judges the draft itself, not the question, so an
     answer that drew on the user's notes stays local even if the turn that produced it
@@ -71,6 +78,7 @@ def draft_privacy(draft: str) -> Tuple[bool, str, List[Dict[str, Any]]]:
         matches = vault.search(draft[:2000], limit=5)
     except (requests.RequestException, KeyError, ValueError) as exc:
         return False, f"vault search failed ({type(exc).__name__})", []
+    matches = [m for m in matches if os.path.splitext(os.path.basename(m["path"]))[0] not in AIDEN_OWN_NOTES]
     top = max((m["score"] for m in matches), default=0.0)
     if top >= DRAFT_MAX_NOTE_SCORE:
         return False, f"resembles the user's notes (score {top:.2f} >= {DRAFT_MAX_NOTE_SCORE})", matches

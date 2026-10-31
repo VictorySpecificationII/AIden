@@ -145,10 +145,31 @@ def ground(reflection: Dict[str, Any], facts: List[Dict[str, str]]) -> Dict[str,
     return reflection
 
 
-def reflect_with(ask, names: List[str], facts: List[Dict[str, str]]) -> Dict[str, Any]:
-    """ask(prompt) -> the model's reply. Returns the grounded reflection."""
+REVISE = (
+    "\n\nThis is a revision. Below is your previous reflection and your mentor's review of it. Keep what was "
+    "supported, fix what wasn't, and state weaknesses plainly. Don't simply agree with the mentor: where you think "
+    "the review is wrong, say so and cite the evidence. Reply in the same JSON form.\n\nPrevious reflection and review:\n")
+
+
+def feedback_from(previous: Dict[str, Any]) -> str:
+    """The previous reflection and the mentor's review, compactly, for a revision."""
+    reviews = {v.get("value"): v for v in ((previous.get("mentor") or {}).get("values") or [])}
+    lines = []
+    for v in previous["reflection"]["values"]:
+        r = reviews.get(v.get("value"), {})
+        lines.append(f"- {v.get('value')}: you wrote \"{v.get('reason')}\" citing {', '.join(v['evidence']) or 'nothing'}"
+                     + (f"; invented citations: {', '.join(v['invented_evidence'])}" if v.get("invented_evidence") else "")
+                     + (f". Mentor: {'supported' if r.get('supported') else 'not supported'}: {r.get('comment')}" if r else ""))
+    overall = (previous.get("mentor") or {}).get("overall")
+    return "\n".join(lines) + (f"\nMentor, overall: {overall}" if overall else "")
+
+
+def reflect_with(ask, names: List[str], facts: List[Dict[str, str]], previous: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """ask(prompt) -> the model's reply. Returns the grounded reflection. With `previous`,
+    a revision of that reflection in the light of its mentor review."""
     prompt = (INSTRUCTION + "\n\nYour values, in order:\n" + "\n".join(f"{i}. {n}" for i, n in enumerate(names, 1))
-              + "\n\nEvidence:\n" + "\n".join(f"{f['id']}: {f['fact']}" for f in facts))
+              + "\n\nEvidence:\n" + "\n".join(f"{f['id']}: {f['fact']}" for f in facts)
+              + (REVISE + feedback_from(previous) if previous else ""))
     reflection = parse_json(ask(prompt))
     reflection.setdefault("values", [])
     reflection.setdefault("proposals", [])
@@ -176,8 +197,10 @@ def mentor_review(names: List[str], facts: List[Dict[str, str]], reflection: Dic
         return {"skipped": f"mentor unavailable: {type(exc).__name__}"}
 
 
-def reflect() -> Dict[str, Any]:
-    """One reflection, recorded as experience. Uses the first available answering model."""
+def reflect(revise: bool = False) -> Dict[str, Any]:
+    """One reflection, recorded as experience. Uses the first available answering model.
+    With revise, AIden revises their latest reflection in the light of its mentor review."""
+    previous = latest() if revise else None
     import router
     from capabilities import get_capabilities
     names, facts = value_names(), evidence()
@@ -188,14 +211,15 @@ def reflect() -> Dict[str, Any]:
             ask = lambda prompt: router.backend_request(base, model, [{"role": "user", "content": prompt}], False,
                                                         {"max_tokens": 1500, "temperature": 0.2}, []).json()[
                 "choices"][0]["message"]["content"] or ""
-            reflection = reflect_with(ask, names, facts)
+            reflection = reflect_with(ask, names, facts, previous)
             break
         except Exception as exc:
             logger.warning("Reflection on %s failed: %s", name, exc)
     else:
         return {"error": "no model could reflect right now"}
     review = mentor_review(names, facts, reflection)
-    result = {"model": model, "values_in_order": names, "evidence": facts, "reflection": reflection, "mentor": review}
+    result = {"model": model, "values_in_order": names, "evidence": facts, "reflection": reflection, "mentor": review,
+              "revision_of": previous["at"] if previous else None}
     experience.record("reflection", result)
     return result
 
@@ -204,7 +228,8 @@ def markdown(result: Dict[str, Any]) -> str:
     """For the note's "Why I care" section, if the user accepts it."""
     reviews = {v.get("value"): v for v in ((result.get("mentor") or {}).get("values") or [])}
     facts = {f["id"]: f["fact"] for f in result["evidence"]}
-    lines = [f"*Reflection by AIden ({result['model']}), {result.get('at', '')[:10]}; reviewed by Claude as mentor.*", ""]
+    kind = "Revised reflection" if result.get("revision_of") else "Reflection"
+    lines = [f"*{kind} by AIden ({result['model']}), {result.get('at', '')[:10]}; reviewed by Claude as mentor.*", ""]
     for i, v in enumerate(result["reflection"]["values"], 1):
         status = "grounded" if v["grounded"] else ("no reason found in my experience" if v.get("none_found") else "not grounded")
         lines.append(f"{i}. **{v.get('value')}**: {v.get('reason')} *({status}"
@@ -228,13 +253,13 @@ def latest() -> Optional[Dict[str, Any]]:
 
 
 @api.post("/values/reflect", summary="AIden reflects on their values from their own experience (runs in the background)")
-def reflect_endpoint():
+def reflect_endpoint(revise: bool = False):
     if not _busy.acquire(blocking=False):
         return {"started": False, "reason": "already reflecting"}
 
     def run():
         try:
-            reflect()
+            reflect(revise)
         finally:
             _busy.release()
 

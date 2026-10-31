@@ -76,3 +76,16 @@ def test_privacy_guard_stands_between_the_reflection_and_claude(monkeypatch):
     monkeypatch.setattr(mentor, "ask_mentor", lambda *a: pytest.fail("must not ask Claude"))
     review = reflection.mentor_review(["Honesty"], [], {"values": [], "proposals": []})
     assert "not sent to Claude" in review["skipped"]
+
+
+def test_a_revision_sees_the_review_and_may_push_back():
+    previous = {"at": "2026-10-31T21:00:00", "reflection": {"values": [
+        {"value": "Being genuinely helpful", "reason": "users rate me well", "evidence": ["E15"], "invented_evidence": [], "grounded": True}],
+        "proposals": []},
+        "mentor": {"values": [{"value": "Being genuinely helpful", "supported": False, "comment": "3 ratings is thin"}],
+                   "overall": "somewhat flattering"}}
+    seen = {}
+    reflection.reflect_with(lambda prompt: seen.update(prompt=prompt) or "{}", ["Being genuinely helpful"],
+                            [{"id": "E15", "fact": "3 ratings"}], previous)
+    assert "This is a revision" in seen["prompt"] and "3 ratings is thin" in seen["prompt"]
+    assert "Don't simply agree with the mentor" in seen["prompt"] and "somewhat flattering" in seen["prompt"]

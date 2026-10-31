@@ -76,3 +76,14 @@ def test_draft_check_fails_closed_when_the_vault_is_unreachable(monkeypatch):
         raise requests.ConnectionError("qdrant down")
     monkeypatch.setattr(mentor.vault, "search", down)
     assert mentor.draft_privacy("anything")[0] is False
+
+
+def test_text_resembling_aidens_own_notes_may_go_to_the_mentor(monkeypatch):
+    """The user's decision: AIden's own notes describe AIden, not the user's life."""
+    import mentor
+    own = {"path": "HPC Engineering/InferenceDesign/AIden - Values.md", "score": 0.9, "text": "honesty matters", "heading": ""}
+    private = {"path": "Clients/Volt/notes.md", "score": 0.9, "text": "client secret plan", "heading": ""}
+    monkeypatch.setattr(mentor.vault, "search", lambda text, limit: [own])
+    assert mentor.draft_privacy("I care about honesty")[0] is True
+    monkeypatch.setattr(mentor.vault, "search", lambda text, limit: [own, private])
+    assert mentor.draft_privacy("I care about honesty")[0] is False  # any other note still blocks
