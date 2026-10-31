@@ -85,3 +85,6 @@ model_paths.json
 **/aiden_venv
 # Service passwords (bootstrap/generate-secrets.sh); never commit
 secrets/
+
+# Homepage writes its own logs here
+tools/sre/homepage/logs/
