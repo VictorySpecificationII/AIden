@@ -15,6 +15,7 @@ import capabilities
 import chat_api
 import feedback
 import models
+import reflection
 import selfcheck
 import senses
 import tools
@@ -80,6 +81,7 @@ app.include_router(capabilities.api)
 app.include_router(chat_api.api)
 app.include_router(selfcheck.api)
 app.include_router(models.api)
+app.include_router(reflection.api)
 
 @app.get("/", include_in_schema=False)
 def root():
