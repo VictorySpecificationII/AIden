@@ -55,6 +55,7 @@ def test_no_decision_before_enough_time_and_traffic(world):
 
 
 def test_real_traffic_can_veto_a_gpu_candidate(world, monkeypatch):
+    world.state["devices"]["npu"]["trial"] = None  # "cand" is only on trial on the GPU, so it may be deleted
     start("gpu", days_ago=3)
     add_pairs("gpu", 12, active="a", candidate="c")
     monkeypatch.setattr(evals, "local_verdicts", lambda judge, pairs, seed: ["active"] * len(pairs))

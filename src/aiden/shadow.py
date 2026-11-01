@@ -189,14 +189,17 @@ def check(device: str) -> Optional[Dict[str, Any]]:
     slots = models.state(max_age_s=0)["devices"][device]
     if result["veto"]:
         models.steward("POST", "/end-trial", {"device": device})
-        models.steward("POST", "/delete", {"name": shadow["name"]})
+        models.delete_if_reversible(shadow["name"])
         models.journal("shadow_ended", device=device, source=shadow["source"], name=shadow["name"],
                        outcome="rejected", reason=result["veto"], shadow=result, ended_because=why_now)
         models.journal("rejected", device=device, source=shadow["source"], name=shadow["name"], reason=result["veto"])
         outcome = "rejected"
+    elif models.activate_if_reversible(device, shadow["name"], shadow["source"], shadow["reason"]):
+        models.journal("shadow_ended", device=device, source=shadow["source"], name=shadow["name"],
+                       outcome="held for the user", shadow=result, ended_because=why_now)
+        outcome = "held for the user"
     else:
         evidence = "" if len(collected) >= MIN_PAIRS else f" (shadow inconclusive: {len(collected)} pairs)"
-        models.steward("POST", "/activate", {"device": device, "name": shadow["name"]})
         models.switch_counter.add(1, {"device": device, "action": "switch"})
         models.journal("shadow_ended", device=device, source=shadow["source"], name=shadow["name"],
                        outcome="switched", shadow=result, ended_because=why_now)

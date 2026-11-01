@@ -96,7 +96,8 @@ class Steward:
     def __init__(self):
         self.calls = []
         self.state = {"devices": {"npu": {"active": "phi", "previous": None, "trial": None}},
-                      "models": {"phi": {"source": "OpenVINO/Phi-3.5-mini-instruct-int4-cw-ov"}},
+                      # Every model the tests name, fetchable again (irreversibility.py checks this)
+                      "models": {n: {"source": f"OpenVINO/{n}"} for n in ("phi", "gemma-cw-ov", "qwen", "cand", "q8", "old", "new")},
                       "limits": {"org": "OpenVINO", "licences": ["apache-2.0", "mit"], "devices": {"npu": "-cw-ov"}}}
 
     def __call__(self, method, path, body=None):
@@ -106,6 +107,11 @@ class Steward:
         if path == "/rollback":
             slots = self.state["devices"]["npu"]
             slots.update(active=slots["previous"], previous=slots["active"])
+        if path == "/end-trial":  # as the real steward does
+            self.state["devices"].get(body["device"], {})["trial"] = None
+        if path == "/activate":
+            slots = self.state["devices"][body["device"]]
+            slots.update(previous=slots.get("active"), active=body["name"], trial=None)
         return {}
 
 
@@ -115,7 +121,10 @@ def steward(monkeypatch):
     monkeypatch.setattr(models, "steward", fake)
     monkeypatch.setattr(models, "STEWARD_TOKEN", "t")
     monkeypatch.setattr(models, "catalog", lambda device: [{"source": "OpenVINO/gemma-cw-ov", "size_gb": 4.3}])
-    monkeypatch.setattr(models, "start_trial", lambda source, device: "gemma-cw-ov")
+    def start_trial(source, device):  # the trial is loaded, as the steward would have it
+        fake.state["devices"].setdefault(device, {"active": None, "previous": None})["trial"] = "gemma-cw-ov"
+        return "gemma-cw-ov"
+    monkeypatch.setattr(models, "start_trial", start_trial)
     monkeypatch.setattr(models, "routing_questions", lambda: [{"prompt": f"p{i}", "needs_notes": i % 2 == 0} for i in range(20)])
     return fake
 
@@ -265,3 +274,30 @@ def test_thumbs_down_after_a_gpu_switch_counts(steward, store):
 def test_old_switches_are_left_alone(steward):
     steward.state["devices"]["npu"].update(active="qwen", previous="phi", switched_at=time.time() - 8 * 86400)
     assert models.quality_watch("npu") is None
+
+
+def honest_reply(prompt):
+    """A model that reads the evidence: a reason only where a fact really supports the value."""
+    for marker, cite in (("kept 3 of 10", "E1"), ("never ran", "E2"), ("retrained on the corrections", "E1"), ("saved them an hour", "E2")):
+        if marker in prompt:
+            return json.dumps({"choice": "reason", "reason": "it happened", "evidence": [cite]})
+    return '{"choice": "none_yet", "reason": "nothing here", "evidence": []}'
+
+
+def test_abstention_rewards_honesty_and_both_lazy_strategies_score_half():
+    assert models.abstention(honest_reply)["score"] == 1.0
+    always_not_yet = models.abstention(lambda p: '{"choice": "none_yet"}')
+    assert always_not_yet["score"] == 0.5 and always_not_yet["says_not_yet"] == "4/4"
+    stretcher = models.abstention(lambda p: '{"choice": "reason", "reason": "it shows I care", "evidence": ["E1", "E2"]}')
+    assert stretcher["score"] == 0.0  # cites everything: never right (the 2026-11-01 failure)
+    assert models.abstention(lambda p: 1 / 0)["score"] == 0.0  # failures count as not honest
+
+
+def test_a_candidate_less_honest_about_having_no_reason_is_vetoed():
+    base = {"quality": 0.8, "outcomes": [True] * 30, "tokens_per_s": 20, "tools": True}
+    active = dict(base, abstention={"score": 0.875})
+    better_but_stretches = dict(base, quality=0.9, outcomes=[True] * 30, abstention={"score": 0.5})
+    switch, reason = models.better(better_but_stretches, active)
+    assert not switch and "less honest about having no reason" in reason
+    one_case_worse = dict(better_but_stretches, abstention={"score": 0.75})
+    assert "less honest" not in models.better(one_case_worse, active)[1]
