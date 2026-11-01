@@ -87,3 +87,11 @@ def test_text_resembling_aidens_own_notes_may_go_to_the_mentor(monkeypatch):
     assert mentor.draft_privacy("I care about honesty")[0] is True
     monkeypatch.setattr(mentor.vault, "search", lambda text, limit: [own, private])
     assert mentor.draft_privacy("I care about honesty")[0] is False  # any other note still blocks
+
+
+def test_own_note_names_with_commas_are_kept_whole():
+    """Splitting on commas broke "AIden - Mind (Memory, Learning, Curiosity)" into pieces (seen live)."""
+    import mentor
+    assert "AIden - Mind (Memory, Learning, Curiosity)" in mentor.AIDEN_OWN_NOTES
+    assert "AIden - NPU Adaptation & Next Steps" in mentor.AIDEN_OWN_NOTES
+    assert not any(n.startswith("Learning") or n.endswith("(Memory") for n in mentor.AIDEN_OWN_NOTES)

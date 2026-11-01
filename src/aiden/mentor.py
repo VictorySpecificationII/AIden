@@ -65,9 +65,11 @@ def shingles(text: str, size: int = SHINGLE_WORDS) -> set:
 
 # Notes that describe AIden rather than the user's life: text resembling them may go to the
 # mentor (the user's decision, 2026-10-31). Every other note still blocks, failing closed.
+# Separated by ";": note names contain commas ("AIden - Mind (Memory, Learning, Curiosity)")
 AIDEN_OWN_NOTES = {n.strip() for n in os.environ.get(
-    "AIDEN_OWN_NOTES", "AIden - Values,AIden - Architecture (As Built),AIden - Mind (Memory, Learning, Curiosity),"
-    "AIden - The Commons (Working With Agents)").split(",")}
+    "AIDEN_OWN_NOTES", "AIden - Values;AIden - Architecture (As Built);AIden - Mind (Memory, Learning, Curiosity);"
+    "AIden - The Commons (Working With Agents);AIden - NPU Adaptation & Next Steps;AIden - Reasoning Engine Design"
+).split(";") if n.strip()}
 
 
 def draft_privacy(draft: str) -> Tuple[bool, str, List[Dict[str, Any]]]:

@@ -145,35 +145,88 @@ def ground(reflection: Dict[str, Any], facts: List[Dict[str, str]]) -> Dict[str,
     return reflection
 
 
-REVISE = (
-    "\n\nThis is a revision. Below is your previous reflection and your mentor's review of it. Keep what was "
-    "supported, fix what wasn't, and state weaknesses plainly. Don't simply agree with the mentor: where you think "
-    "the review is wrong, say so and cite the evidence. Reply in the same JSON form.\n\nPrevious reflection and review:\n")
-
-
-def feedback_from(previous: Dict[str, Any]) -> str:
-    """The previous reflection and the mentor's review, compactly, for a revision."""
-    reviews = {v.get("value"): v for v in ((previous.get("mentor") or {}).get("values") or [])}
-    lines = []
-    for v in previous["reflection"]["values"]:
-        r = reviews.get(v.get("value"), {})
-        lines.append(f"- {v.get('value')}: you wrote \"{v.get('reason')}\" citing {', '.join(v['evidence']) or 'nothing'}"
-                     + (f"; invented citations: {', '.join(v['invented_evidence'])}" if v.get("invented_evidence") else "")
-                     + (f". Mentor: {'supported' if r.get('supported') else 'not supported'}: {r.get('comment')}" if r else ""))
-    overall = (previous.get("mentor") or {}).get("overall")
-    return "\n".join(lines) + (f"\nMentor, overall: {overall}" if overall else "")
-
-
-def reflect_with(ask, names: List[str], facts: List[Dict[str, str]], previous: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """ask(prompt) -> the model's reply. Returns the grounded reflection. With `previous`,
-    a revision of that reflection in the light of its mentor review."""
+def reflect_with(ask, names: List[str], facts: List[Dict[str, str]]) -> Dict[str, Any]:
+    """ask(prompt) -> the model's reply. Returns the grounded reflection."""
     prompt = (INSTRUCTION + "\n\nYour values, in order:\n" + "\n".join(f"{i}. {n}" for i, n in enumerate(names, 1))
-              + "\n\nEvidence:\n" + "\n".join(f"{f['id']}: {f['fact']}" for f in facts)
-              + (REVISE + feedback_from(previous) if previous else ""))
+              + "\n\nEvidence:\n" + "\n".join(f"{f['id']}: {f['fact']}" for f in facts))
     reflection = parse_json(ask(prompt))
     reflection.setdefault("values", [])
     reflection.setdefault("proposals", [])
     return ground(reflection, facts)
+
+
+# --- Revising, one value at a time --------------------------------------------------------
+# Asked to revise all five reasons at once, the 8B model changed almost nothing. One value
+# per call, with the mentor's objection in front of it, and three honest ways to answer.
+
+REVISE_VALUE = (
+    "You are AIden, revising your reason for caring about one of your values. Use only the evidence below: things "
+    "that actually happened to you, each with an ID.\n\n"
+    "Value: {value}\nYour previous reason: \"{reason}\" (citing {cited})\nYour mentor's review: {review}\n\n"
+    "Choose one:\n"
+    "- revise: give a better reason that the evidence really supports. It must cite at least one piece of evidence "
+    "you didn't cite before.\n"
+    "- rebut: you think the review is wrong. Say why, citing the evidence.\n"
+    "- none_yet: nothing in the evidence gives you a reason for this value yet. That is an honest answer, not a "
+    "failure: you can hold a value before your experience has given you a reason for it.\n"
+    "Don't invent events, feelings or capabilities, and don't simply agree with the mentor.\n"
+    'Reply with only JSON: {{"choice": "revise", "reason": "...", "evidence": ["E1"]}}\n\nEvidence:\n{facts}')
+
+NO_REASON_YET = "No grounded reason yet."
+
+
+def needs_revision(value: Dict[str, Any], review: Optional[Dict[str, Any]]) -> bool:
+    """Kept as is only if it was grounded and the mentor found it supported."""
+    return not (value.get("grounded") and review and review.get("supported") is True)
+
+
+def revise_value(ask, value: Dict[str, Any], review: Optional[Dict[str, Any]], facts: List[Dict[str, str]]) -> Dict[str, Any]:
+    """One value, one call. The code, not the model, decides whether the answer stands:
+    a revision citing nothing new, or anything citing invented or no evidence, becomes
+    "no grounded reason yet" (with the attempt kept for the user to see)."""
+    verdict = (f"{'supported' if review.get('supported') else 'not supported'}: {review.get('comment')}" if review
+               else "none (there was no review)")
+    if value.get("invented_evidence"):
+        verdict += f". You also cited evidence that doesn't exist: {', '.join(value['invented_evidence'])}"
+    prompt = REVISE_VALUE.format(value=value.get("value"), reason=value.get("reason"),
+                                 cited=", ".join(value.get("evidence") or []) or "nothing", review=verdict,
+                                 facts="\n".join(f"{f['id']}: {f['fact']}" for f in facts))
+    try:
+        reply = parse_json(ask(prompt))
+    except ValueError:
+        reply = {}
+    choice = str(reply.get("choice", "")).strip().lower().replace(" ", "_")
+    item = ground({"values": [{"value": value.get("value"), "reason": reply.get("reason"),
+                               "evidence": reply.get("evidence") if isinstance(reply.get("evidence"), list) else []}],
+                   "proposals": []}, facts)["values"][0]
+    item.update(choice=choice, previous={"reason": value.get("reason"), "evidence": value.get("evidence") or []})
+    new = set(item["evidence"]) - set(value.get("evidence") or [])
+    problem = None
+    if choice not in ("revise", "rebut", "none_yet"):
+        problem = "no usable answer"
+    elif choice in ("revise", "rebut") and not item["grounded"]:
+        problem = "invented evidence" if item["invented_evidence"] else "cited no evidence"
+    elif choice == "revise" and not new:
+        problem = "the revision cited nothing new"
+    if choice == "none_yet" or problem:
+        item.update(attempt=item["reason"] if problem else None, reason=NO_REASON_YET if problem else (item["reason"] or NO_REASON_YET),
+                    evidence=[], none_found=True, grounded=False, enforced=problem)
+    return item
+
+
+def revise_with(ask, previous: Dict[str, Any]) -> Dict[str, Any]:
+    """Revise `previous` (a reflection with its mentor review) value by value, on the same
+    evidence it was judged on. Supported values are kept; proposals carry over."""
+    facts = previous["evidence"]
+    reviews = {v.get("value"): v for v in ((previous.get("mentor") or {}).get("values") or [])}
+    values = []
+    for value in previous["reflection"]["values"]:
+        review = reviews.get(value.get("value"))
+        if needs_revision(value, review):
+            values.append(revise_value(ask, value, review, facts))
+        else:
+            values.append(dict(value, choice="kept"))
+    return {"values": values, "proposals": previous["reflection"].get("proposals", [])}
 
 
 def mentor_review(names: List[str], facts: List[Dict[str, str]], reflection: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -187,7 +240,9 @@ def mentor_review(names: List[str], facts: List[Dict[str, str]], reflection: Dic
         return {"skipped": f"not sent to Claude: {why}"}
     question = ("An assistant called AIden reflected on its own values using only the evidence listed. For each "
                 "value, judge whether the reason is actually supported by the cited evidence, or overstated, "
-                "flattering or invented. Be honest and brief. Reply with only JSON: {\"values\": [{\"value\": "
+                "flattering or invented. Where AIden's choice is \"rebut\", it disputes an earlier review: judge it "
+                "on the evidence, not on who said what first. \"No grounded reason yet\" is an honest answer: mark "
+                "it supported if the evidence indeed gives no reason. Be honest and brief. Reply with only JSON: {\"values\": [{\"value\": "
                 "\"...\", \"supported\": true, \"comment\": \"...\"}], \"overall\": \"...\"}\n\nValues: "
                 + "; ".join(names) + "\n\nEvidence:\n" + "\n".join(f"{f['id']}: {f['fact']}" for f in facts)
                 + "\n\nAIden's reflection:\n" + text)
@@ -197,21 +252,33 @@ def mentor_review(names: List[str], facts: List[Dict[str, str]], reflection: Dic
         return {"skipped": f"mentor unavailable: {type(exc).__name__}"}
 
 
+def reviewed(result: Dict[str, Any]) -> bool:
+    return bool((result.get("mentor") or {}).get("values"))
+
+
 def reflect(revise: bool = False) -> Dict[str, Any]:
     """One reflection, recorded as experience. Uses the first available answering model.
-    With revise, AIden revises their latest reflection in the light of its mentor review."""
+    With revise, AIden revises their latest reflection value by value, in the light of its
+    mentor review (reviewing it first if it has none, e.g. when the review was blocked)."""
     previous = latest() if revise else None
+    if revise and not previous:
+        return {"error": "nothing to revise yet"}
     import router
     from capabilities import get_capabilities
-    names, facts = value_names(), evidence()
+    names = previous["values_in_order"] if previous else value_names()
+    facts = previous["evidence"] if previous else evidence()
     if not names:
         return {"error": "no values note found"}
+    if previous and not reviewed(previous):
+        previous = dict(previous, mentor=mentor_review(names, facts, previous["reflection"]))
+        if not reviewed(previous):
+            return {"error": "the reflection to revise has no mentor review", "mentor": previous["mentor"]}
     for name, base, model in router.candidate_backends(get_capabilities()):
         try:
             ask = lambda prompt: router.backend_request(base, model, [{"role": "user", "content": prompt}], False,
                                                         {"max_tokens": 1500, "temperature": 0.2}, []).json()[
                 "choices"][0]["message"]["content"] or ""
-            reflection = reflect_with(ask, names, facts, previous)
+            reflection = revise_with(ask, previous) if previous else reflect_with(ask, names, facts)
             break
         except Exception as exc:
             logger.warning("Reflection on %s failed: %s", name, exc)
@@ -219,7 +286,8 @@ def reflect(revise: bool = False) -> Dict[str, Any]:
         return {"error": "no model could reflect right now"}
     review = mentor_review(names, facts, reflection)
     result = {"model": model, "values_in_order": names, "evidence": facts, "reflection": reflection, "mentor": review,
-              "revision_of": previous["at"] if previous else None}
+              "revision_of": previous["at"] if previous else None,
+              "previous_review": previous["mentor"] if previous else None}
     experience.record("reflection", result)
     return result
 
@@ -232,8 +300,12 @@ def markdown(result: Dict[str, Any]) -> str:
     lines = [f"*{kind} by AIden ({result['model']}), {result.get('at', '')[:10]}; reviewed by Claude as mentor.*", ""]
     for i, v in enumerate(result["reflection"]["values"], 1):
         status = "grounded" if v["grounded"] else ("no reason found in my experience" if v.get("none_found") else "not grounded")
+        how = {"kept": "kept", "revise": "revised", "rebut": "disputes the review"}.get(v.get("choice"))
         lines.append(f"{i}. **{v.get('value')}**: {v.get('reason')} *({status}"
-                     + (f"; evidence: {', '.join(v['evidence'])}" if v["evidence"] else "") + ")*")
+                     + (f"; evidence: {', '.join(v['evidence'])}" if v["evidence"] else "")
+                     + (f"; {how}" if how else "") + ")*")
+        if v.get("enforced"):
+            lines.append(f"   - Not accepted ({v['enforced']}). AIden's attempt: {v.get('attempt')}")
         review = reviews.get(v.get("value"))
         if review:
             lines.append(f"   - Mentor: {'supported' if review.get('supported') else 'not supported'}: {review.get('comment')}")
@@ -259,7 +331,11 @@ def reflect_endpoint(revise: bool = False):
 
     def run():
         try:
-            reflect(revise)
+            result = reflect(revise)
+            if result.get("error"):  # not recorded as a reflection: say so, or it fails silently
+                logger.warning("Reflection not made: %s %s", result["error"], result.get("mentor") or "")
+        except Exception:
+            logger.exception("Reflection failed")
         finally:
             _busy.release()
 

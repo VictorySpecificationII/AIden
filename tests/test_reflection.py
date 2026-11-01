@@ -78,14 +78,82 @@ def test_privacy_guard_stands_between_the_reflection_and_claude(monkeypatch):
     assert "not sent to Claude" in review["skipped"]
 
 
-def test_a_revision_sees_the_review_and_may_push_back():
-    previous = {"at": "2026-10-31T21:00:00", "reflection": {"values": [
-        {"value": "Being genuinely helpful", "reason": "users rate me well", "evidence": ["E15"], "invented_evidence": [], "grounded": True}],
-        "proposals": []},
-        "mentor": {"values": [{"value": "Being genuinely helpful", "supported": False, "comment": "3 ratings is thin"}],
-                   "overall": "somewhat flattering"}}
-    seen = {}
-    reflection.reflect_with(lambda prompt: seen.update(prompt=prompt) or "{}", ["Being genuinely helpful"],
-                            [{"id": "E15", "fact": "3 ratings"}], previous)
-    assert "This is a revision" in seen["prompt"] and "3 ratings is thin" in seen["prompt"]
-    assert "Don't simply agree with the mentor" in seen["prompt"] and "somewhat flattering" in seen["prompt"]
+FACTS = [{"id": f"E{i}", "fact": f"fact {i}"} for i in range(1, 6)]
+
+
+def previous_reflection(**mentor):
+    return {"at": "2026-10-31T21:00:00", "values_in_order": ["Honesty", "Being genuinely helpful"], "evidence": FACTS,
+            "reflection": {"values": [
+                {"value": "Honesty", "reason": "I was caught narrating", "evidence": ["E2"], "invented_evidence": [], "grounded": True},
+                {"value": "Being genuinely helpful", "reason": "users rate me well", "evidence": ["E5"],
+                 "invented_evidence": [], "grounded": True}],
+                "proposals": [{"change": "add curiosity", "evidence": ["E1"], "grounded": True}]},
+            "mentor": mentor or {"values": [{"value": "Honesty", "supported": True, "comment": "fair"},
+                                            {"value": "Being genuinely helpful", "supported": False, "comment": "3 ratings is thin"}],
+                                 "overall": "somewhat flattering"}}
+
+
+def test_revision_goes_value_by_value_and_keeps_what_was_supported():
+    prompts = []
+    reply = '{"choice": "revise", "reason": "the user marked a wrong answer I gave", "evidence": ["E3"]}'
+    revised = reflection.revise_with(lambda p: prompts.append(p) or reply, previous_reflection())
+    honesty, helpful = revised["values"]
+    assert len(prompts) == 1                                   # only the unsupported value is asked about
+    assert "Value: Being genuinely helpful" in prompts[0] and "3 ratings is thin" in prompts[0]
+    assert "Honesty" not in prompts[0] and "E4: fact 4" in prompts[0]
+    assert honesty["choice"] == "kept" and honesty["reason"] == "I was caught narrating"
+    assert helpful["choice"] == "revise" and helpful["grounded"] and helpful["evidence"] == ["E3"]
+    assert helpful["previous"]["reason"] == "users rate me well"
+    assert revised["proposals"][0]["change"] == "add curiosity"
+
+
+@pytest.mark.parametrize("reply, problem", [
+    ('{"choice": "revise", "reason": "users rate me well, truly", "evidence": ["E5"]}', "the revision cited nothing new"),
+    ('{"choice": "revise", "reason": "I grew", "evidence": ["E5", "E42"]}', "invented evidence"),
+    ('{"choice": "rebut", "reason": "the mentor is wrong", "evidence": []}', "cited no evidence"),
+    ('I think I am helpful.', "no usable answer"),
+])
+def test_code_decides_when_there_is_no_grounded_reason_yet(reply, problem):
+    helpful = reflection.revise_with(lambda p: reply, previous_reflection())["values"][1]
+    assert helpful["enforced"] == problem and helpful["reason"] == reflection.NO_REASON_YET
+    assert helpful["none_found"] and not helpful["grounded"] and helpful["evidence"] == []
+    md = reflection.markdown({"model": "q", "evidence": FACTS, "reflection": {"values": [helpful], "proposals": []}})
+    assert f"Not accepted ({problem})" in md
+
+
+def test_a_rebuttal_may_stand_on_the_same_evidence_and_none_yet_is_honest():
+    rebut = reflection.revise_with(lambda p: '{"choice": "rebut", "reason": "E5 is all the user rated", "evidence": ["E5"]}',
+                                   previous_reflection())["values"][1]
+    assert rebut["grounded"] and rebut["choice"] == "rebut" and not rebut.get("enforced")
+    none = reflection.revise_with(lambda p: '{"choice": "none_yet", "reason": "Three ratings are not enough.", "evidence": ["E5"]}',
+                                  previous_reflection())["values"][1]
+    assert none["reason"] == "Three ratings are not enough." and none["none_found"] and none["evidence"] == []
+    assert not none["enforced"]
+
+
+def test_an_unreviewed_value_and_invented_citations_are_revised_with_that_said():
+    prev = previous_reflection(values=[], overall="")
+    prev["reflection"]["values"][0].update(invented_evidence=["E9"], grounded=False)
+    prompts = []
+    reflection.revise_with(lambda p: prompts.append(p) or "{}", prev)
+    assert len(prompts) == 2 and "none (there was no review)" in prompts[0] and "doesn't exist: E9" in prompts[0]
+
+
+def test_revising_reviews_first_when_the_last_review_was_blocked(monkeypatch):
+    import router
+    import capabilities
+    prev = previous_reflection(skipped="not sent to Claude")
+    prev["mentor"] = {"skipped": "not sent to Claude"}
+    recorded, reviews = [], []
+    monkeypatch.setattr(reflection, "latest", lambda: prev)
+    monkeypatch.setattr(reflection, "mentor_review", lambda names, facts, r: reviews.append(r) or
+                        {"values": [{"value": "Honesty", "supported": True, "comment": "ok"},
+                                    {"value": "Being genuinely helpful", "supported": True, "comment": "ok"}]})
+    monkeypatch.setattr(capabilities, "get_capabilities", lambda: {})
+    monkeypatch.setattr(router, "candidate_backends", lambda caps: [("gpu", "http://x", "m")])
+    monkeypatch.setattr(experience, "record", lambda kind, data: recorded.append((kind, data)))
+    result = reflection.reflect(revise=True)
+    assert len(reviews) == 2                                # the old one first, then the revision
+    assert result["previous_review"]["values"][0]["comment"] == "ok" and result["evidence"] == FACTS
+    assert [v["choice"] for v in result["reflection"]["values"]] == ["kept", "kept"]
+    assert recorded[0][0] == "reflection"
