@@ -16,6 +16,7 @@ import chat_api
 import feedback
 import models
 import reflection
+import irreversibility
 import selfcheck
 import senses
 import tools
@@ -74,6 +75,7 @@ def start_background_work():
     feedback.start()
     senses.start()
     models.start()
+    reflection.start()
 
 app.include_router(tools.api)
 app.include_router(vault_api.api)
@@ -82,6 +84,7 @@ app.include_router(chat_api.api)
 app.include_router(selfcheck.api)
 app.include_router(models.api)
 app.include_router(reflection.api)
+app.include_router(irreversibility.api)
 
 @app.get("/", include_in_schema=False)
 def root():

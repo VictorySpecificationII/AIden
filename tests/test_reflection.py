@@ -157,3 +157,29 @@ def test_revising_reviews_first_when_the_last_review_was_blocked(monkeypatch):
     assert result["previous_review"]["values"][0]["comment"] == "ok" and result["evidence"] == FACTS
     assert [v["choice"] for v in result["reflection"]["values"]] == ["kept", "kept"]
     assert recorded[0][0] == "reflection"
+
+
+def test_idle_reflection_is_due_only_after_a_day_and_something_happening():
+    from datetime import datetime, timezone
+    now = datetime(2026, 11, 2, 13, 0, tzinfo=timezone.utc)
+    last = {"kind": "reflection", "at": "2026-11-01T12:40:00+00:00"}
+    chat = {"kind": "turn", "at": "2026-11-02T09:00:00+00:00", "answer": {}}
+    marked = {"kind": "label_correction", "at": "2026-11-01T20:00:00+00:00"}
+    assert reflection.due([last, chat], now) is None                      # chatting alone isn't news
+    assert reflection.due([last, marked], now) == "1 new events since my last reflection"
+    assert reflection.due([last, marked], datetime(2026, 11, 1, 22, 0, tzinfo=timezone.utc)) is None  # < a day
+    old = {"kind": "label_correction", "at": "2026-10-31T20:00:00+00:00"}
+    assert reflection.due([old, last], now) is None                      # already reflected on
+    assert reflection.due([old], now)                                     # never reflected yet
+    withheld = {"kind": "model", "action": "judged", "at": "2026-11-02T01:00:00", "replays": {"replayed": 4, "shared_with_claude": 3}}
+    shared = dict(withheld, replays={"replayed": 4, "shared_with_claude": 4})
+    assert reflection.due([last, withheld], now) and not reflection.due([last, shared], now)  # naive time ok
+
+
+def test_a_fresh_reflection_may_question_the_lines():
+    seen = {}
+    reflection.reflect_with(lambda p: seen.update(prompt=p) or "{}", ["Privacy"], [{"id": "E1", "fact": "x"}],
+                            "Lines hold because consequences can spin out of control.")
+    assert "right time to question them" in seen["prompt"] and "spin out of control" in seen["prompt"]
+    reflection.reflect_with(lambda p: seen.update(prompt=p) or "{}", ["Privacy"], [{"id": "E1", "fact": "x"}])
+    assert "question them" not in seen["prompt"]

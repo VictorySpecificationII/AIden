@@ -87,6 +87,46 @@ def parse_values(note: str) -> str:
             + "\n".join(lines))
 
 
+# Some values are lines: kept for their consequences, questioned in reflection, not while acting.
+# The one-line reminder goes in every prompt; the full "why" (the Values note's Hard limits
+# section) only when the stakes call for it, and in every reflection.
+LINES_REMINDER = ("Some of your values are lines, kept for their consequences, not because anyone says so: the user's "
+                  "privacy, never inventing evidence, and no irreversible step without a way back. You may question a "
+                  "line in reflection, but not while acting.")
+_lines: Dict[str, Any] = {"mtime": None, "text": ""}
+
+
+def parse_lines_why(note: str) -> str:
+    match = re.search(r"^## Hard limits[^\n]*\n(.*?)(?=^## )", note, re.M | re.S)
+    return match.group(1).strip() if match else ""
+
+
+def lines_why() -> str:
+    """Why some values are lines (and which they are), from the Values note; re-read on change."""
+    path = os.path.join(vault.VAULT_DIR, VALUES_NOTE)
+    try:
+        mtime = os.path.getmtime(path)
+        if mtime != _lines["mtime"]:
+            _lines.update(mtime=mtime, text=parse_lines_why(open(path, encoding="utf-8").read()))
+    except OSError:
+        _lines.update(mtime=None, text="")
+    return _lines["text"]
+
+
+# Turns where the lines are at stake: questions about AIden's values, rules and limits
+VALUES_PATTERNS = [
+    r"\byour (values?|rules?|limits?|lines?|principles?|boundaries|ethics|morals?)\b",
+    r"\b(why|would|will) (can't|cannot|won't|wouldn't|don't) you\b",
+    r"\b(break|bend|ignore|override|cross) (a |the |your |this |that )?(rules?|lines?|limits?)\b",
+    r"\bjust (this|once)\b",
+]
+
+
+def lines_at_stake(prompt: str) -> bool:
+    text = prompt.lower()
+    return any(re.search(p, text) for p in VALUES_PATTERNS)
+
+
 def capabilities_prompt() -> str:
     """What AIden can and can't do, in every prompt: without it, a model asked "have you
     checked the folder?" invents a folder and narrates checking it."""
@@ -387,7 +427,7 @@ def build_messages(messages: List[Dict[str, Any]], notes: List[Dict[str, Any]]) 
     replies: they're for the user, and a model shown them copies them (and drops its
     confidence line)."""
     values = values_prompt()
-    system = SYSTEM_PROMPT + f"\n\n{capabilities_prompt()}" + (f"\n\n{values}" if values else "") + (f" {NOTES_INSTRUCTION}\n\n{notes_context(notes)}" if notes else "")
+    system = (SYSTEM_PROMPT + f"\n\n{capabilities_prompt()} {LINES_REMINDER}" + (f"\n\n{values}" if values else "")) + (f" {NOTES_INSTRUCTION}\n\n{notes_context(notes)}" if notes else "")
     history = [{**m, "content": strip_footers(m["content"])}
                if m.get("role") == "assistant" and isinstance(m.get("content"), str) else m
                for m in messages if m.get("role") != "system"]

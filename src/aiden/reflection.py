@@ -22,7 +22,8 @@ import logging
 import os
 import re
 import threading
-from datetime import datetime
+import time
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter
@@ -69,6 +70,9 @@ def evidence(history: Optional[List[Dict[str, Any]]] = None) -> List[Dict[str, s
                 facts.append(f"{day(r)}: while judging a model, my privacy guard kept {rp['replayed'] - rp['shared_with_claude']} "
                              f"of {rp['replayed']} replays of the user's conversations away from Claude because they "
                              "resembled the user's notes.")
+        elif kind == "model" and action == "held":
+            facts.append(f"{day(r)}: I held back from switching my {r['device'].upper()} to {r['name']} although it "
+                         f"scored better, because the switch couldn't be safely undone ({'; '.join(r.get('problems') or [])}).")
         elif kind == "label_correction":
             rated = " The user had rated that answer thumbs-up." if r.get("user_rating") == "up" else ""
             facts.append(f"{day(r)}: reviewing my answers, the user and Claude found a problem with one of them "
@@ -145,9 +149,14 @@ def ground(reflection: Dict[str, Any], facts: List[Dict[str, str]]) -> Dict[str,
     return reflection
 
 
-def reflect_with(ask, names: List[str], facts: List[Dict[str, str]]) -> Dict[str, Any]:
+LINES = ("\n\nSome of your values are lines. This is a calm moment, so it's the right time to question them: if the "
+         "evidence suggests a line is in the wrong place, propose moving it. Why they are lines, from your notes:\n")
+
+
+def reflect_with(ask, names: List[str], facts: List[Dict[str, str]], lines_why: str = "") -> Dict[str, Any]:
     """ask(prompt) -> the model's reply. Returns the grounded reflection."""
     prompt = (INSTRUCTION + "\n\nYour values, in order:\n" + "\n".join(f"{i}. {n}" for i, n in enumerate(names, 1))
+              + (LINES + lines_why if lines_why else "")
               + "\n\nEvidence:\n" + "\n".join(f"{f['id']}: {f['fact']}" for f in facts))
     reflection = parse_json(ask(prompt))
     reflection.setdefault("values", [])
@@ -256,7 +265,7 @@ def reviewed(result: Dict[str, Any]) -> bool:
     return bool((result.get("mentor") or {}).get("values"))
 
 
-def reflect(revise: bool = False) -> Dict[str, Any]:
+def reflect(revise: bool = False, trigger: str = "asked") -> Dict[str, Any]:
     """One reflection, recorded as experience. Uses the first available answering model.
     With revise, AIden revises their latest reflection value by value, in the light of its
     mentor review (reviewing it first if it has none, e.g. when the review was blocked)."""
@@ -273,12 +282,16 @@ def reflect(revise: bool = False) -> Dict[str, Any]:
         previous = dict(previous, mentor=mentor_review(names, facts, previous["reflection"]))
         if not reviewed(previous):
             return {"error": "the reflection to revise has no mentor review", "mentor": previous["mentor"]}
+    why = "" if previous else router.lines_why()
     for name, base, model in router.candidate_backends(get_capabilities()):
+        limit = router.PROMPT_LIMITS.get(name)
+        if limit and not previous and router.estimated_tokens([{"role": "user", "content": INSTRUCTION + why + str(facts)}]) > limit:
+            continue  # too long for this backend (the NPU): don't send what it would reject
         try:
             ask = lambda prompt: router.backend_request(base, model, [{"role": "user", "content": prompt}], False,
                                                         {"max_tokens": 1500, "temperature": 0.2}, []).json()[
                 "choices"][0]["message"]["content"] or ""
-            reflection = revise_with(ask, previous) if previous else reflect_with(ask, names, facts)
+            reflection = revise_with(ask, previous) if previous else reflect_with(ask, names, facts, why)
             break
         except Exception as exc:
             logger.warning("Reflection on %s failed: %s", name, exc)
@@ -287,7 +300,7 @@ def reflect(revise: bool = False) -> Dict[str, Any]:
     review = mentor_review(names, facts, reflection)
     result = {"model": model, "values_in_order": names, "evidence": facts, "reflection": reflection, "mentor": review,
               "revision_of": previous["at"] if previous else None,
-              "previous_review": previous["mentor"] if previous else None}
+              "previous_review": previous["mentor"] if previous else None, "trigger": trigger}
     experience.record("reflection", result)
     return result
 
@@ -296,7 +309,8 @@ def markdown(result: Dict[str, Any]) -> str:
     """For the note's "Why I care" section, if the user accepts it."""
     reviews = {v.get("value"): v for v in ((result.get("mentor") or {}).get("values") or [])}
     facts = {f["id"]: f["fact"] for f in result["evidence"]}
-    kind = "Revised reflection" if result.get("revision_of") else "Reflection"
+    kind = ("Revised reflection" if result.get("revision_of") else "Reflection") + (
+        ", made in idle time" if result.get("trigger") == "idle" else "")
     lines = [f"*{kind} by AIden ({result['model']}), {result.get('at', '')[:10]}; reviewed by Claude as mentor.*", ""]
     for i, v in enumerate(result["reflection"]["values"], 1):
         status = "grounded" if v["grounded"] else ("no reason found in my experience" if v.get("none_found") else "not grounded")
@@ -322,6 +336,67 @@ def markdown(result: Dict[str, Any]) -> str:
 def latest() -> Optional[Dict[str, Any]]:
     found = [r for r in records() if r.get("kind") == "reflection"]
     return found[-1] if found else None
+
+
+# --- Reflecting in idle hours ---------------------------------------------------------------
+# Like people do: when it's quiet, and only when something has happened worth thinking about.
+# At most once a day. Results wait for the user; nothing changes the Values note by itself.
+
+IDLE_REFLECT_EVERY_S = float(os.environ.get("AIDEN_IDLE_REFLECT_EVERY_S", 24 * 3600))
+IDLE_CHECK_S = 600
+SIGNIFICANT = {"label_correction", "feedback", "mentor"}
+SIGNIFICANT_MODEL = {"switched", "rejected", "rolled_back", "rejudged", "held"}
+
+
+def significant(record: Dict[str, Any]) -> bool:
+    """Events that change what AIden could say about their values (not every chat turn)."""
+    if record.get("kind") in SIGNIFICANT:
+        return True
+    if record.get("kind") == "model":
+        replays = record.get("replays") if isinstance(record.get("replays"), dict) else {}
+        withheld = replays.get("replayed", 0) > replays.get("shared_with_claude", replays.get("replayed", 0))
+        return record.get("action") in SIGNIFICANT_MODEL or (record.get("action") == "judged" and withheld)
+    return False
+
+
+def when(record: Dict[str, Any]) -> datetime:
+    at = datetime.fromisoformat(record["at"])
+    return at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+
+
+def due(history: List[Dict[str, Any]], now: Optional[datetime] = None) -> Optional[str]:
+    """Why an idle reflection is due now, or None."""
+    now = now or datetime.now(timezone.utc)
+    reflections = [r for r in history if r.get("kind") == "reflection"]
+    since = when(reflections[-1]) if reflections else None
+    if since and now - since < timedelta(seconds=IDLE_REFLECT_EVERY_S):
+        return None
+    new = [r for r in history if significant(r) and (since is None or when(r) > since)]
+    return f"{len(new)} new events since my last reflection" if new else None
+
+
+def run_idle_forever():
+    import models
+    time.sleep(IDLE_CHECK_S)
+    while True:
+        try:
+            why = models.idle() and due(records())
+            if why and _busy.acquire(blocking=False):
+                try:
+                    logger.info("Reflecting in idle time: %s", why)
+                    result = reflect(trigger="idle")
+                    if result.get("error"):
+                        logger.warning("Idle reflection not made: %s", result["error"])
+                finally:
+                    _busy.release()
+        except Exception:
+            logger.exception("Idle reflection failed")
+        time.sleep(IDLE_CHECK_S)
+
+
+def start():
+    if os.environ.get("AIDEN_IDLE_REFLECTION", "true").lower() != "false":
+        threading.Thread(target=run_idle_forever, daemon=True, name="idle-reflection").start()
 
 
 @api.post("/values/reflect", summary="AIden reflects on their values from their own experience (runs in the background)")

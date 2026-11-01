@@ -230,6 +230,13 @@ def chat_completions(body: Dict[str, Any]):
             span.set_attribute("router.notes", [f"{n['score']:.3f} {n['path']} › {n['heading']}" for n in matches])
             logger.info("Vault search: %d of %d matches above %.2f", len(notes), len(matches), router.MIN_NOTE_SCORE)
 
+    if router.lines_at_stake(prompt) and router.lines_why():
+        # The lines' "why", right after the live status (fit_prompt keeps the first note longest)
+        why = {"path": router.VALUES_NOTE, "heading": "Hard limits", "score": 1.0, "text": router.lines_why()}
+        at = 1 if notes and notes[0]["path"] == "AIden (live status)" else 0
+        notes = notes[:at] + [why] + [n for n in notes[at:] if not (n["path"] == router.VALUES_NOTE and "Hard limits" in n.get("heading", ""))]
+        logger.info("Lines at stake: their why is attached")
+
     out_messages = router.build_messages(messages, notes)
     stream = bool(body.get("stream"))
     response, skipped, tool_calls = None, [], []

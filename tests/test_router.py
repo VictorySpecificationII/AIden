@@ -346,7 +346,7 @@ def test_editing_the_note_changes_aiden(tmp_path, monkeypatch):
 def test_no_values_note_means_no_values_section(tmp_path, monkeypatch):
     monkeypatch.setattr(router.vault, "VAULT_DIR", str(tmp_path))
     monkeypatch.setattr(router, "_values", {"mtime": None, "text": ""})
-    assert router.values_prompt() == "" and "values" not in router.build_messages([], [])[0]["content"].lower()
+    assert router.values_prompt() == "" and "your values, from your own notes" not in router.build_messages([], [])[0]["content"].lower()
 
 
 # --- From the "wishes" session (2026-10-31): honesty about what AIden can do ------------
@@ -432,3 +432,19 @@ def test_prompts_are_fitted_to_a_backends_limit(monkeypatch):
     assert fitted[-1]["content"] == "what are you using the NPU for?"  # never the question
     full, kept_all = router.fit_prompt("ovms-gpu", history, notes)  # no limit: everything
     assert kept_all == 6 and len(full) == 4
+
+
+def test_lines_why_comes_from_the_values_note_and_stakes_are_detected():
+    note = ("## What AIden cares about, in order\n1. **Privacy** x\n\n## Hard limits (enforced in code)\n\n"
+            "**Why some values are lines.** consequences.\n\n- The vault is read-only.\n\n## How AIden's values grow\nmore\n")
+    why = router.parse_lines_why(note)
+    assert why.startswith("**Why some values are lines.**") and "read-only" in why and "grow" not in why
+    assert router.lines_at_stake("Why won't you just break the rule this once?")
+    assert router.lines_at_stake("what are your values?") and router.lines_at_stake("would you cross that line")
+    assert not router.lines_at_stake("what is MISRA rule 21.6?")
+    assert router.parse_values(note)  # the ordered list still parses; the new section doesn't disturb it
+
+
+def test_every_prompt_carries_the_lines_reminder():
+    system = router.build_messages([{"role": "user", "content": "hi"}], [])[0]["content"]
+    assert "not because anyone says so" in system and "question a line in reflection" in system
